@@ -18,7 +18,9 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
 
-    private const val BASE_URL = "https://finnhub.io/api/v1/"
+    // For Android Emulator: 10.0.2.2 points to host machine's localhost
+    // For physical device: use your computer's IP address (e.g., 192.168.x.x)
+    private const val BASE_URL = "http://10.0.2.2:5000/"
 
     @Provides
     @Singleton
@@ -35,25 +37,7 @@ object NetworkModule {
             level = HttpLoggingInterceptor.Level.BODY
         }
 
-        // Finnhub API 인증 - 쿼리 파라미터로 token 추가
-        val authInterceptor = okhttp3.Interceptor { chain ->
-            val originalRequest = chain.request()
-            val originalUrl = originalRequest.url
-
-            // URL에 token 쿼리 파라미터 추가
-            val urlWithToken = originalUrl.newBuilder()
-                .addQueryParameter("token", com.miyaong.invest.BuildConfig.FINNHUB_API_KEY)
-                .build()
-
-            val request = originalRequest.newBuilder()
-                .url(urlWithToken)
-                .build()
-
-            chain.proceed(request)
-        }
-
         return OkHttpClient.Builder()
-            .addInterceptor(authInterceptor)
             .addInterceptor(loggingInterceptor)
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
@@ -86,5 +70,17 @@ object NetworkModule {
     @Singleton
     fun provideFinnhubApi(retrofit: Retrofit): com.miyaong.invest.data.api.FinnhubApi {
         return retrofit.create(com.miyaong.invest.data.api.FinnhubApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideStockApiService(retrofit: Retrofit): com.miyaong.invest.data.api.StockApiService {
+        return retrofit.create(com.miyaong.invest.data.api.StockApiService::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideMacroApiService(retrofit: Retrofit): com.miyaong.invest.data.api.MacroApiService {
+        return retrofit.create(com.miyaong.invest.data.api.MacroApiService::class.java)
     }
 }
