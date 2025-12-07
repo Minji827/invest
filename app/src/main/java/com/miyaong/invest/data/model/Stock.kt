@@ -45,6 +45,19 @@ data class Stock(
     val low52Week: Double? = null
 )
 
+// 3가지 카테고리 인기 종목 응답
+@Serializable
+data class TrendingStocksData(
+    @SerialName("mostActive")
+    val mostActive: List<Stock> = emptyList(),
+    
+    @SerialName("topGainers")
+    val topGainers: List<Stock> = emptyList(),
+    
+    @SerialName("mostVolatile")
+    val mostVolatile: List<Stock> = emptyList()
+)
+
 @Serializable
 data class StockHistory(
     @SerialName("date")
