@@ -9,7 +9,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.rememberNavController
-import com.miyaong.invest.presentation.navigation.NavGraph
+import com.miyaong.invest.navigation.NavGraph
 import com.miyaong.invest.ui.theme.InvestTheme
 import dagger.hilt.android.AndroidEntryPoint
 
