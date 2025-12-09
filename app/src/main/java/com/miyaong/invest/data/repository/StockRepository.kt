@@ -143,6 +143,7 @@ class StockRepository @Inject constructor(
                 Result.Error(Exception(response.message ?: "Unknown error"))
             }
         } catch (e: Exception) {
+            android.util.Log.e("StockRepository", "TrendingStocks Error: ${e.message}", e)
             Result.Error(e)
         }
     }
@@ -157,6 +158,7 @@ class StockRepository @Inject constructor(
                 Result.Error(Exception(response.message ?: "Unknown error"))
             }
         } catch (e: Exception) {
+            android.util.Log.e("StockRepository", "MacroIndicators Error: ${e.message}", e)
             Result.Error(e)
         }
     }

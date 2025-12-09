@@ -20,7 +20,7 @@ object NetworkModule {
 
     // For Android Emulator: 10.0.2.2 points to host machine's localhost
     // For physical device: use your computer's IP address (e.g., 192.168.x.x)
-    private const val BASE_URL = "https://invest-qviy.onrender.com/"
+    private const val BASE_URL = "https://invest-qviy.onrender.com/" // Updated to Render URL
 
     @Provides
     @Singleton
