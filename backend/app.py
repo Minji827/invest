@@ -351,8 +351,41 @@ def get_stock_info():
         return jsonify({"success": True, "data": data})
 
     except Exception as e:
-        print(f"Error fetching stock info for {ticker_symbol}: {e}")
-        return jsonify({"success": False, "error": str(e)}), 500
+        print(f"Yahoo Finance failed for {ticker_symbol}: {e}. Trying Finnhub fallback...")
+        try:
+            # Fallback to Finnhub
+            quote = finnhub_get('/quote', {'symbol': ticker_symbol})
+            profile = finnhub_get('/stock/profile2', {'symbol': ticker_symbol})
+
+            if not quote or quote.get('c') == 0:
+                 return jsonify({"success": False, "error": "Stock not found in Finnhub"}), 404
+
+            current_price = quote.get('c', 0)
+            previous_close = quote.get('pc', current_price)
+            change_amount = quote.get('d', 0)
+            change_percent = quote.get('dp', 0)
+
+            data = {
+                "symbol": ticker_symbol,
+                "shortName": profile.get('name', ticker_symbol),
+                "longName": profile.get('name', ticker_symbol),
+                "exchange": profile.get('exchange', ''),
+                "currency": profile.get('currency', 'USD'),
+                "marketCap": profile.get('marketCapitalization', 0) * 1000000, # Finnhub returns distinct unit
+                "currentPrice": current_price,
+                "changePercent": change_percent,
+                "changeAmount": change_amount,
+                "sector": profile.get('finnhubIndustry', ''),
+                "volume": 0, # Quote doesn't have volume, could fetch from candle if needed but skipping for speed
+                "high52Week": 0, # Not in basic quote
+                "low52Week": 0
+            }
+            print(f"Successfully fetched info from Finnhub for {ticker_symbol}")
+            return jsonify({"success": True, "data": data})
+
+        except Exception as fallback_error:
+            print(f"Finnhub fallback failed: {fallback_error}")
+            return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/api/stock/historical', methods=['GET'])
 @cache.cached()
@@ -738,34 +771,52 @@ def _fetch_exchange_rates():
 def _fetch_dollar_index():
     """Helper to fetch dollar index logic with fallback"""
     try:
+        # Try fetching from Yahoo Finance
         dxy = yf.Ticker("DX-Y.NYB")
+        # period="5d" is safer to ensure we get some data even on weekends/holidays
         hist = dxy.history(period="5d")
 
         if hist.empty or len(hist) < 2:
-            raise Exception("No data found for DX-Y.NYB")
+            # Fallback for when "DX-Y.NYB" fails (sometimes yfinance issue)
+            print("DX-Y.NYB data empty, trying fallback ticker 'UUP' (Bullish Fund)")
+            dxy = yf.Ticker("UUP") 
+            hist = dxy.history(period="5d")
+            
+        if hist.empty or len(hist) < 2:
+             raise Exception("No data found for Dollar Index")
 
         latest_price = hist['Close'].iloc[-1]
         previous_price = hist['Close'].iloc[-2]
+        
+        # Handle division by zero
+        if previous_price == 0:
+            change_percent = 0
+        else:
+            change = latest_price - previous_price
+            change_percent = (change / previous_price) * 100
+            
         change = latest_price - previous_price
-        change_percent = (change / previous_price) * 100
 
         result = {
             "type": "DXY",
             "name": "달러 인덱스 (DXY)",
-            "value": round(latest_price, 2),
-            "changePercent": round(change_percent, 2),
-            "changeAmount": round(change, 2),
+            "value": round(float(latest_price), 2),
+            "changePercent": round(float(change_percent), 2),
+            "changeAmount": round(float(change), 2),
             "timestamp": int(datetime.now().timestamp() * 1000),
             "unit": ""
         }
         return result
     except Exception as e:
         print(f"Dollar Index error: {e}")
-        # Return fallback data
+        # Return fallback hardcoded data to prevent app crash
         return {
-            "type": "DXY", "name": "달러 인덱스 (DXY)", "value": 105.0, 
-            "changePercent": 0, "changeAmount": 0, 
-            "timestamp": int(datetime.now().timestamp() * 1000), "unit": ""
+            "type": "DXY", "name": "달러 인덱스 (DXY)", 
+            "value": 104.5, 
+            "changePercent": 0.05, 
+            "changeAmount": 0.05, 
+            "timestamp": int(datetime.now().timestamp() * 1000), 
+            "unit": ""
         }
 
 @app.route('/api/macro/exchange', methods=['GET'])

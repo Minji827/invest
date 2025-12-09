@@ -47,7 +47,6 @@ fun ChartTab(
     val (rsiChecked, onRsiChanged) = rememberSaveable { mutableStateOf(false) }
     val (macdChecked, onMacdChanged) = rememberSaveable { mutableStateOf(false) }
 
-
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -72,12 +71,11 @@ fun ChartTab(
             IndicatorToggle(checked = macdChecked, onCheckedChange = onMacdChanged, label = "MACD")
         }
 
-
-        // Chart Placeholder
+        // Chart
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(500.dp),
+                .height(400.dp),
             colors = CardDefaults.cardColors(containerColor = SecondaryDark),
             shape = RoundedCornerShape(12.dp)
         ) {
@@ -100,16 +98,33 @@ fun ChartTab(
                     }
                 }
             } else {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "📈 차트가 곧 표시됩니다",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = TextDim
+                // Vico Chart Implementation (1.15.0)
+                val chartEntryModelProducer = remember { com.patrykandpatrick.vico.core.entry.ChartEntryModelProducer() }
+
+                LaunchedEffect(history) {
+                    chartEntryModelProducer.setEntries(
+                        history.mapIndexed { index, item ->
+                            com.patrykandpatrick.vico.core.entry.entryOf(index.toFloat(), item.close.toFloat())
+                        }
                     )
                 }
+
+                com.patrykandpatrick.vico.compose.chart.Chart(
+                    chart = com.patrykandpatrick.vico.compose.chart.line.lineChart(),
+                    chartModelProducer = chartEntryModelProducer,
+                    startAxis = com.patrykandpatrick.vico.compose.axis.vertical.rememberStartAxis(),
+                    bottomAxis = com.patrykandpatrick.vico.compose.axis.horizontal.rememberBottomAxis(
+                        valueFormatter = { value, _ ->
+                            val index = value.toInt()
+                            if (index in history.indices && index % (history.size / 5 + 1) == 0) {
+                                history[index].date.takeLast(5)
+                            } else {
+                                ""
+                            }
+                        }
+                    ),
+                    modifier = Modifier.padding(16.dp)
+                )
             }
         }
     }
@@ -215,7 +230,7 @@ fun FinancialTab(
                         }
                     }
 
-                    Divider(color = BorderColor)
+                    HorizontalDivider(color = BorderColor)
 
                     // Rows
                     FinancialRow("매출액", financials.map { it.revenue })
@@ -261,7 +276,7 @@ fun FinancialRow(
             )
         }
     }
-    Divider(color = BorderColor.copy(alpha = 0.3f))
+    HorizontalDivider(color = BorderColor.copy(alpha = 0.3f))
 }
 
 @Composable

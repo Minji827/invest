@@ -7,7 +7,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material3.*
@@ -44,7 +44,7 @@ fun StockDetailScreen(
                 title = { Text(ticker) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, "뒤로가기", tint = TextPrimary)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "뒤로가기", tint = TextPrimary)
                     }
                 },
                 actions = {
@@ -100,7 +100,7 @@ fun StockDetailScreen(
                         indicators = uiState.indicators,
                         selectedPeriod = uiState.selectedPeriod,
                         onPeriodSelected = { viewModel.selectPeriod(it) },
-                        isLoading = uiState.isLoading
+                        isLoading = uiState.isChartLoading
                     )
                     1 -> FinancialTab(
                         financials = uiState.financials,
@@ -129,7 +129,10 @@ fun StockDetailScreen(
                 item {
                     ErrorMessage(
                         message = uiState.error!!,
-                        onRetry = { viewModel.loadStockData() },
+                        onRetry = { 
+                            viewModel.loadStockInfo()
+                            viewModel.loadChartData() 
+                        },
                         modifier = Modifier.padding(16.dp)
                     )
                 }

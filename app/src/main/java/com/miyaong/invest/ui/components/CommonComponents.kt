@@ -51,6 +51,7 @@ fun MacroCard(
             Column {
                 Text(
                     text = label,
+
                     style = MaterialTheme.typography.labelMedium,
                     color = TextDim,
                     fontWeight = FontWeight.Medium

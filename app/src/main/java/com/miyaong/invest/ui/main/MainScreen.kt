@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Notifications
@@ -32,9 +33,24 @@ fun MainScreen(
     var searchQuery by remember { mutableStateOf("") }
 
     var selectedTab by remember { mutableIntStateOf(0) }
-    
+    val alertViewModel: com.miyaong.invest.ui.alert.AlertViewModel = hiltViewModel()
+
     Scaffold(
         containerColor = PrimaryDark,
+        floatingActionButton = {
+            if (selectedTab == 2) {
+                FloatingActionButton(
+                    onClick = { alertViewModel.showAddDialog() },
+                    containerColor = AccentCyan,
+                    contentColor = PrimaryDark
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "알림 추가"
+                    )
+                }
+            }
+        },
         bottomBar = {
             NavigationBar(
                 containerColor = SecondaryDark,
@@ -105,7 +121,10 @@ fun MainScreen(
                     Text("시장분석 화면 (준비 중)", color = TextDim)
                 }
             }
-            2 -> AlertScreen()
+            2 -> AlertScreen(
+                modifier = Modifier.padding(paddingValues),
+                viewModel = alertViewModel
+            )
         }
     }
 }
@@ -157,7 +176,7 @@ private fun HomeContent(
                                         onClick = { onStockClick(stock.symbol) }
                                     )
                                     if (stock != uiState.searchResults.last()) {
-                                        Divider(color = BorderColor.copy(alpha = 0.3f))
+                                        HorizontalDivider(color = BorderColor.copy(alpha = 0.3f))
                                     }
                                 }
                             }
@@ -185,35 +204,72 @@ private fun HomeContent(
                 }
 
                 item {
-                    if (uiState.isLoading && uiState.macroIndicators.isEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(120.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(color = AccentCyan)
+                    when {
+                        uiState.isLoading && uiState.macroIndicators.isEmpty() -> {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(120.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(color = AccentCyan)
+                            }
                         }
-                    } else {
-                        LazyRow(
-                            contentPadding = PaddingValues(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            items(uiState.macroIndicators) { indicator ->
-                                MacroCard(
-                                    label = indicator.name,
-                                    value = "${indicator.unit}${String.format("%.2f", indicator.value)}",
-                                    change = indicator.changePercent,
-                                    changeAmount = "${indicator.unit}${String.format("%.2f", indicator.changeAmount)}",
-                                    icon = when (indicator.type) {
-                                        "USD/KRW" -> "💱"
-                                        "EUR/KRW" -> "💶"
-                                        "JPY/KRW" -> "💴"
-                                        "DXY" -> "📊"
-                                        else -> "📈"
-                                    },
-                                    modifier = Modifier.width(280.dp)
-                                )
+                        !uiState.isLoading && uiState.macroIndicators.isEmpty() -> {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(120.dp)
+                                    .padding(horizontal = 16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = SecondaryDark),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(24.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Text("📊", style = MaterialTheme.typography.headlineMedium)
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            "글로벌 지표를 불러올 수 없습니다",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = TextDim
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        TextButton(onClick = { viewModel.loadData() }) {
+                                            Text("다시 시도", color = AccentCyan)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        else -> {
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                items(uiState.macroIndicators) { indicator ->
+                                    MacroCard(
+                                        label = indicator.name,
+                                        value = "${indicator.unit}${String.format("%.2f", indicator.value)}",
+                                        change = indicator.changePercent,
+                                        changeAmount = "${indicator.unit}${String.format("%.2f", indicator.changeAmount)}",
+                                        icon = when (indicator.type) {
+                                            "USD/KRW" -> "💱"
+                                            "EUR/KRW" -> "💶"
+                                            "JPY/KRW" -> "💴"
+                                            "DXY" -> "📊"
+                                            else -> "📈"
+                                        },
+                                        modifier = Modifier.width(280.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -304,7 +360,7 @@ private fun HomeContent(
                                     )
                                 }
 
-                                Divider(color = BorderColor)
+                                HorizontalDivider(color = BorderColor)
 
                                 // Stock Rows
                                 if (currentStocks.isEmpty()) {
@@ -331,7 +387,7 @@ private fun HomeContent(
                                             onClick = { onStockClick(stock.symbol) }
                                         )
                                         if (index < currentStocks.size - 1 && index < 9) {
-                                            Divider(color = BorderColor.copy(alpha = 0.3f))
+                                            HorizontalDivider(color = BorderColor.copy(alpha = 0.3f))
                                         }
                                     }
                             }

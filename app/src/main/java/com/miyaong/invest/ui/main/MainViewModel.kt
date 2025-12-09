@@ -37,35 +37,41 @@ class MainViewModel @Inject constructor(
 
     fun loadData() {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            try {
+                _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
-            // 매크로 지표 로드
-            when (val result = repository.getMacroIndicators()) {
-                is Result.Success -> {
-                    _uiState.value = _uiState.value.copy(macroIndicators = result.data)
+                // 매크로 지표 로드
+                when (val result = repository.getMacroIndicators()) {
+                    is Result.Success -> {
+                        _uiState.value = _uiState.value.copy(macroIndicators = result.data)
+                    }
+                    is Result.Error -> {
+                        _uiState.value = _uiState.value.copy(
+                            error = result.message ?: "매크로 지표를 불러올 수 없습니다"
+                        )
+                    }
+                    else -> {}
                 }
-                is Result.Error -> {
-                    _uiState.value = _uiState.value.copy(
-                        error = result.message ?: "매크로 지표를 불러올 수 없습니다"
-                    )
+
+                // 인기 종목 로드
+                when (val result = repository.getTrendingStocks()) {
+                    is Result.Success -> {
+                        _uiState.value = _uiState.value.copy(trendingStocks = result.data)
+                    }
+                    is Result.Error -> {
+                        _uiState.value = _uiState.value.copy(
+                            error = result.message ?: "인기 종목을 불러올 수 없습니다"
+                        )
+                    }
+                    else -> {}
                 }
-                else -> {}
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    error = "데이터를 불러오는 중 오류가 발생했습니다: ${e.localizedMessage}"
+                )
+            } finally {
+                _uiState.value = _uiState.value.copy(isLoading = false)
             }
-
-            // 인기 종목 로드
-            when (val result = repository.getTrendingStocks()) {
-                is Result.Success -> {
-                    _uiState.value = _uiState.value.copy(trendingStocks = result.data)
-                }
-                is Result.Error -> {
-                    _uiState.value = _uiState.value.copy(
-                        error = result.message ?: "인기 종목을 불러올 수 없습니다"
-                    )
-                }
-                else -> {}
-            }
-
-            _uiState.value = _uiState.value.copy(isLoading = false)
         }
     }
 
@@ -76,16 +82,22 @@ class MainViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            when (val result = repository.searchStocks(query)) {
-                is Result.Success -> {
-                    _uiState.value = _uiState.value.copy(searchResults = result.data)
+            try {
+                when (val result = repository.searchStocks(query)) {
+                    is Result.Success -> {
+                        _uiState.value = _uiState.value.copy(searchResults = result.data)
+                    }
+                    is Result.Error -> {
+                        _uiState.value = _uiState.value.copy(
+                            error = result.message ?: "검색 결과를 불러올 수 없습니다"
+                        )
+                    }
+                    else -> {}
                 }
-                is Result.Error -> {
-                    _uiState.value = _uiState.value.copy(
-                        error = result.message ?: "검색 결과를 불러올 수 없습니다"
-                    )
-                }
-                else -> {}
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    error = "검색 중 오류가 발생했습니다: ${e.localizedMessage}"
+                )
             }
         }
     }

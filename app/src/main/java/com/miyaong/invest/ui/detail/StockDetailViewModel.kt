@@ -22,6 +22,7 @@ data class StockDetailUiState(
     val prediction: PredictionResult? = null,
     val isFavorite: Boolean = false,
     val isLoading: Boolean = false,
+    val isChartLoading: Boolean = false,
     val error: String? = null,
     val selectedTab: Int = 0,
     val selectedPeriod: String = "6mo",
@@ -41,54 +42,106 @@ class StockDetailViewModel @Inject constructor(
 
     init {
         if (ticker.isNotEmpty()) {
-            loadStockData()
+            loadStockInfo()
+            loadChartData()
             observeFavoriteStatus()
         }
     }
 
-    fun loadStockData() {
+    fun loadStockInfo() {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            try {
+                _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
-            // 기본 정보
-            when (val result = repository.getStockInfo(ticker)) {
-                is Result.Success -> {
-                    _uiState.value = _uiState.value.copy(stock = result.data)
+                // 기본 정보
+                when (val result = repository.getStockInfo(ticker)) {
+                    is Result.Success -> {
+                        _uiState.value = _uiState.value.copy(stock = result.data)
+                    }
+                    is Result.Error -> {
+                        // 차트 데이터가 있으면 에러 무시 (Fallback이 처리함)
+                        if (_uiState.value.history.isEmpty()) {
+                            _uiState.value = _uiState.value.copy(
+                                error = result.message ?: "주식 정보를 불러올 수 없습니다"
+                            )
+                        }
+                    }
+                    else -> {}
                 }
-                is Result.Error -> {
+            } catch (e: Exception) {
+                if (_uiState.value.history.isEmpty()) {
                     _uiState.value = _uiState.value.copy(
-                        error = result.message ?: "주식 정보를 불러올 수 없습니다"
+                        error = "주식 정보를 불러오는 중 오류가 발생했습니다: ${e.localizedMessage}"
                     )
                 }
-                else -> {}
+            } finally {
+                _uiState.value = _uiState.value.copy(isLoading = false)
             }
-
-            loadChartData()
-            _uiState.value = _uiState.value.copy(isLoading = false)
         }
     }
 
     fun loadChartData() {
         viewModelScope.launch {
-            // 주가 히스토리
-            when (val result = repository.getStockHistory(ticker, _uiState.value.selectedPeriod)) {
-                is Result.Success -> {
-                    _uiState.value = _uiState.value.copy(history = result.data)
-                }
-                is Result.Error -> {
-                    _uiState.value = _uiState.value.copy(
-                        error = result.message ?: "차트 데이터를 불러올 수 없습니다"
-                    )
-                }
-                else -> {}
-            }
+            try {
+                _uiState.value = _uiState.value.copy(isChartLoading = true)
+                
+                // 주가 히스토리
+                when (val result = repository.getStockHistory(ticker, _uiState.value.selectedPeriod)) {
+                    is Result.Success -> {
+                        val history = result.data
+                        var currentStock = _uiState.value.stock
+                        
+                        // Fallback: 상세 정보 API가 실패하여 stock이 없는 경우, 차트 데이터 최신값으로 채워넣기
+                        if (currentStock == null && history.isNotEmpty()) {
+                            val latest = history.last()
+                            val previous = if (history.size > 1) history[history.size - 2] else latest
+                            
+                            val price = latest.close
+                            val changeAmount = price - previous.close
+                            val changePercent = if (previous.close != 0.0) (changeAmount / previous.close) * 100 else 0.0
+                            
+                            currentStock = Stock(
+                                symbol = ticker,
+                                shortName = ticker,
+                                currentPrice = price,
+                                changeAmount = changeAmount,
+                                changePercent = changePercent,
+                                currency = "USD"
+                            )
+                            
+                            val currentError = _uiState.value.error
+                            val newError = if (currentError?.contains("주식 정보") == true) null else currentError
 
-            // 기술적 지표
-            when (val result = repository.getTechnicalIndicators(ticker)) {
-                is Result.Success -> {
-                    _uiState.value = _uiState.value.copy(indicators = result.data)
+                            _uiState.value = _uiState.value.copy(
+                                history = history, 
+                                stock = currentStock,
+                                error = newError
+                            )
+                        } else {
+                            _uiState.value = _uiState.value.copy(history = history)
+                        }
+                    }
+                    is Result.Error -> {
+                        _uiState.value = _uiState.value.copy(
+                            error = result.message ?: "차트 데이터를 불러올 수 없습니다"
+                        )
+                    }
+                    else -> {}
                 }
-                else -> {}
+
+                // 기술적 지표
+                when (val result = repository.getTechnicalIndicators(ticker)) {
+                    is Result.Success -> {
+                        _uiState.value = _uiState.value.copy(indicators = result.data)
+                    }
+                    else -> {}
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    error = "차트 데이터를 불러오는 중 오류가 발생했습니다: ${e.localizedMessage}"
+                )
+            } finally {
+                _uiState.value = _uiState.value.copy(isChartLoading = false)
             }
         }
     }
@@ -143,18 +196,25 @@ class StockDetailViewModel @Inject constructor(
 
     fun loadPredictionData(days: Int = 7) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
-            when (val result = repository.predictStock(ticker, days)) {
-                is Result.Success -> {
-                    _uiState.value = _uiState.value.copy(prediction = result.data, isLoading = false)
+            try {
+                _uiState.value = _uiState.value.copy(isLoading = true)
+                when (val result = repository.predictStock(ticker, days)) {
+                    is Result.Success -> {
+                        _uiState.value = _uiState.value.copy(prediction = result.data)
+                    }
+                    is Result.Error -> {
+                        _uiState.value = _uiState.value.copy(
+                            error = result.message ?: "예측 데이터를 불러올 수 없습니다"
+                        )
+                    }
+                    else -> {}
                 }
-                is Result.Error -> {
-                    _uiState.value = _uiState.value.copy(
-                        error = result.message ?: "예측 데이터를 불러올 수 없습니다",
-                        isLoading = false
-                    )
-                }
-                else -> {}
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    error = "예측 데이터를 불러오는 중 오류가 발생했습니다: ${e.localizedMessage}"
+                )
+            } finally {
+                _uiState.value = _uiState.value.copy(isLoading = false)
             }
         }
     }

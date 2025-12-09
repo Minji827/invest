@@ -28,7 +28,7 @@ room = "2.6.1"
 datastore = "1.1.1"
 
 # Chart
-vico = "2.0.0-beta.1"
+vico = "1.15.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
