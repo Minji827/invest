@@ -738,34 +738,52 @@ def _fetch_exchange_rates():
 def _fetch_dollar_index():
     """Helper to fetch dollar index logic with fallback"""
     try:
+        # Try fetching from Yahoo Finance
         dxy = yf.Ticker("DX-Y.NYB")
+        # period="5d" is safer to ensure we get some data even on weekends/holidays
         hist = dxy.history(period="5d")
 
         if hist.empty or len(hist) < 2:
-            raise Exception("No data found for DX-Y.NYB")
+            # Fallback for when "DX-Y.NYB" fails (sometimes yfinance issue)
+            print("DX-Y.NYB data empty, trying fallback ticker 'UUP' (Bullish Fund)")
+            dxy = yf.Ticker("UUP") 
+            hist = dxy.history(period="5d")
+            
+        if hist.empty or len(hist) < 2:
+             raise Exception("No data found for Dollar Index")
 
         latest_price = hist['Close'].iloc[-1]
         previous_price = hist['Close'].iloc[-2]
+        
+        # Handle division by zero
+        if previous_price == 0:
+            change_percent = 0
+        else:
+            change = latest_price - previous_price
+            change_percent = (change / previous_price) * 100
+            
         change = latest_price - previous_price
-        change_percent = (change / previous_price) * 100
 
         result = {
             "type": "DXY",
             "name": "달러 인덱스 (DXY)",
-            "value": round(latest_price, 2),
-            "changePercent": round(change_percent, 2),
-            "changeAmount": round(change, 2),
+            "value": round(float(latest_price), 2),
+            "changePercent": round(float(change_percent), 2),
+            "changeAmount": round(float(change), 2),
             "timestamp": int(datetime.now().timestamp() * 1000),
             "unit": ""
         }
         return result
     except Exception as e:
         print(f"Dollar Index error: {e}")
-        # Return fallback data
+        # Return fallback hardcoded data to prevent app crash
         return {
-            "type": "DXY", "name": "달러 인덱스 (DXY)", "value": 105.0, 
-            "changePercent": 0, "changeAmount": 0, 
-            "timestamp": int(datetime.now().timestamp() * 1000), "unit": ""
+            "type": "DXY", "name": "달러 인덱스 (DXY)", 
+            "value": 104.5, 
+            "changePercent": 0.05, 
+            "changeAmount": 0.05, 
+            "timestamp": int(datetime.now().timestamp() * 1000), 
+            "unit": ""
         }
 
 @app.route('/api/macro/exchange', methods=['GET'])

@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Notifications
@@ -32,9 +33,24 @@ fun MainScreen(
     var searchQuery by remember { mutableStateOf("") }
 
     var selectedTab by remember { mutableIntStateOf(0) }
-    
+    val alertViewModel: com.miyaong.invest.ui.alert.AlertViewModel = hiltViewModel()
+
     Scaffold(
         containerColor = PrimaryDark,
+        floatingActionButton = {
+            if (selectedTab == 2) {
+                FloatingActionButton(
+                    onClick = { alertViewModel.showAddDialog() },
+                    containerColor = AccentCyan,
+                    contentColor = PrimaryDark
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "알림 추가"
+                    )
+                }
+            }
+        },
         bottomBar = {
             NavigationBar(
                 containerColor = SecondaryDark,
@@ -105,7 +121,10 @@ fun MainScreen(
                     Text("시장분석 화면 (준비 중)", color = TextDim)
                 }
             }
-            2 -> AlertScreen()
+            2 -> AlertScreen(
+                modifier = Modifier.padding(paddingValues),
+                viewModel = alertViewModel
+            )
         }
     }
 }
