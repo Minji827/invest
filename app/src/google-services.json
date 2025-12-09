@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "136282914530",
+    "project_id": "invest-713fb",
+    "storage_bucket": "invest-713fb.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:136282914530:android:fd6061e2b16afa806f68bb",
+        "android_client_info": {
+          "package_name": "com.miyaong.invest"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB5KZp2Cd1GS1NUe8TceLdBp-Lw4Y3wvtc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
