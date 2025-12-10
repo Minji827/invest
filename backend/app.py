@@ -311,7 +311,7 @@ def get_stock_candles(symbol, resolution='D', days=365):
 @app.route('/api/stock/info', methods=['GET'])
 @cache.cached()
 def get_stock_info():
-    """Get basic stock information using yfinance"""
+    """Get basic stock information using yfinance fast_info"""
     ticker_symbol = request.args.get('ticker', '').upper()
 
     if not ticker_symbol:
@@ -319,33 +319,44 @@ def get_stock_info():
 
     try:
         ticker = yf.Ticker(ticker_symbol)
-        info = ticker.info
+        # Use fast_info for critical price data
+        fast_info = ticker.fast_info
+        info = ticker.info # Still get info for name, sector, etc.
         
-        # Check if we got valid data
-        if not info or 'regularMarketPrice' not in info and 'currentPrice' not in info:
-             # Try fetching history if info is incomplete (common yfinance issue)
-             hist = ticker.history(period="1d")
-             if hist.empty:
-                return jsonify({"success": False, "error": "Stock not found"}), 404
-             current_price = hist['Close'].iloc[-1]
-        else:
+        try:
+            current_price = fast_info['last_price']
+            previous_close = fast_info['regular_market_previous_close']
+        except:
+             # Fallback to info or history
              current_price = info.get('currentPrice') or info.get('regularMarketPrice')
+             previous_close = info.get('previousClose') or info.get('regularMarketPreviousClose')
+             
+             if not current_price:
+                 hist = ticker.history(period="1d")
+                 if not hist.empty:
+                     current_price = hist['Close'].iloc[-1]
+                     # If previous close missing, use Open or approximate
+                     previous_close = hist['Open'].iloc[-1] 
+                 else:
+                     return jsonify({"success": False, "error": "Stock not found"}), 404
 
-        # Map yfinance info to our API response format
+        change_amount = current_price - previous_close if previous_close else 0
+        change_percent = (change_amount / previous_close * 100) if previous_close else 0
+
         data = {
             "symbol": ticker_symbol,
             "shortName": info.get('shortName', ticker_symbol),
             "longName": info.get('longName', ticker_symbol),
-            "exchange": info.get('exchange', ''),
-            "currency": info.get('currency', 'USD'),
-            "marketCap": info.get('marketCap'),
+            "exchange": info.get('exchange', fast_info.get('exchange', '')),
+            "currency": info.get('currency', fast_info.get('currency', 'USD')),
+            "marketCap": info.get('marketCap', fast_info.get('market_cap')),
             "currentPrice": current_price,
-            "changePercent": ((current_price - info.get('previousClose', current_price)) / info.get('previousClose', 1)) * 100 if info.get('previousClose') else 0,
-            "changeAmount": current_price - info.get('previousClose', current_price) if info.get('previousClose') else 0,
+            "changePercent": change_percent,
+            "changeAmount": change_amount,
             "sector": info.get('sector', ''),
             "volume": info.get('volume') or info.get('regularMarketVolume'),
-            "high52Week": info.get('fiftyTwoWeekHigh'),
-            "low52Week": info.get('fiftyTwoWeekLow')
+            "high52Week": info.get('fiftyTwoWeekHigh', fast_info.get('year_high')),
+            "low52Week": info.get('fiftyTwoWeekLow', fast_info.get('year_low'))
         }
 
         return jsonify({"success": True, "data": data})

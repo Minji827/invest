@@ -11,8 +11,8 @@ import com.miyaong.invest.ui.main.MainScreen
 
 sealed class Screen(val route: String) {
     object Main : Screen("main")
-    object StockDetail : Screen("stock_detail/{ticker}") {
-        fun createRoute(ticker: String) = "stock_detail/$ticker"
+    object StockDetail : Screen("stock_detail/{ticker}?name={name}") {
+        fun createRoute(ticker: String, name: String = "") = "stock_detail/$ticker?name=$name"
     }
 }
 
@@ -27,8 +27,8 @@ fun NavGraph(
     ) {
         composable(Screen.Main.route) {
             MainScreen(
-                onStockClick = { ticker ->
-                    navController.navigate(Screen.StockDetail.createRoute(ticker))
+                onStockClick = { ticker, name ->
+                    navController.navigate(Screen.StockDetail.createRoute(ticker, name))
                 }
             )
         }
@@ -38,6 +38,11 @@ fun NavGraph(
             arguments = listOf(
                 navArgument("ticker") {
                     type = NavType.StringType
+                },
+                navArgument("name") {
+                    type = NavType.StringType
+                    defaultValue = ""
+                    nullable = true
                 }
             )
         ) { backStackEntry ->

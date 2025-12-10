@@ -27,7 +27,7 @@ import com.miyaong.invest.ui.theme.*
 @Composable
 fun MainScreen(
     viewModel: MainViewModel = hiltViewModel(),
-    onStockClick: (String) -> Unit
+    onStockClick: (String, String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
@@ -111,7 +111,6 @@ fun MainScreen(
                 paddingValues = paddingValues
             )
             1 -> {
-                // 분석 탭 - TODO
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -134,7 +133,7 @@ private fun HomeContent(
     uiState: MainUiState,
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
-    onStockClick: (String) -> Unit,
+    onStockClick: (String, String) -> Unit,
     viewModel: MainViewModel,
     paddingValues: PaddingValues
 ) {
@@ -173,7 +172,7 @@ private fun HomeContent(
                                         changePercent = stock.changePercent ?: 0.0,
                                         volume = stock.volume ?: 0L,
                                         marketCap = stock.marketCap ?: 0L,
-                                        onClick = { onStockClick(stock.symbol) }
+                                        onClick = { onStockClick(stock.symbol, stock.shortName ?: stock.longName ?: stock.symbol) }
                                     )
                                     if (stock != uiState.searchResults.last()) {
                                         HorizontalDivider(color = BorderColor.copy(alpha = 0.3f))
@@ -384,18 +383,18 @@ private fun HomeContent(
                                             changePercent = stock.changePercent ?: 0.0,
                                             volume = stock.volume ?: 0L,
                                             marketCap = stock.marketCap ?: 0L,
-                                            onClick = { onStockClick(stock.symbol) }
+                                            onClick = { onStockClick(stock.symbol, stock.shortName ?: stock.longName ?: stock.symbol) }
                                         )
                                         if (index < currentStocks.size - 1 && index < 9) {
                                             HorizontalDivider(color = BorderColor.copy(alpha = 0.3f))
                                         }
                                     }
+                                }
                             }
                         }
                     }
                 }
             }
-        }
     }
 }
 

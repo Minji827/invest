@@ -63,45 +63,43 @@ fun StockDetailScreen(
             )
         }
     ) { paddingValues ->
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(PrimaryDark)
                 .padding(paddingValues)
         ) {
             // Header Section
-            item {
-                StockDetailHeader(
-                    name = stock?.shortName ?: stock?.longName ?: ticker,
-                    symbol = ticker,
-                    exchange = stock?.exchange ?: "",
-                    sector = stock?.sector ?: "",
-                    currentPrice = stock?.currentPrice ?: 0.0,
-                    changeAmount = stock?.changeAmount ?: 0.0,
-                    changePercent = stock?.changePercent ?: 0.0,
-                    lastUpdatedTimestamp = System.currentTimeMillis()
-                )
-            }
+            StockDetailHeader(
+                name = stock?.shortName ?: stock?.longName ?: ticker,
+                symbol = ticker,
+                exchange = stock?.exchange ?: "",
+                sector = stock?.sector ?: "",
+                currentPrice = stock?.currentPrice ?: 0.0,
+                changeAmount = stock?.changeAmount ?: 0.0,
+                changePercent = stock?.changePercent ?: 0.0,
+                lastUpdatedTimestamp = System.currentTimeMillis()
+            )
 
             // Chart Section
-            item {
-                Spacer(modifier = Modifier.height(16.dp))
-                Box(modifier = Modifier.fillParentMaxHeight(0.8f)) {
-                    ChartTab(
-                        symbol = uiState.ticker
-                    )
-                }
-            }
-
-            // Error Message
-            if (uiState.error != null) {
-                item {
+            Spacer(modifier = Modifier.height(16.dp))
+            Box(modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+            ) {
+                ChartTab(
+                    symbol = uiState.ticker,
+                    modifier = Modifier.fillMaxSize()
+                )
+                
+                if (uiState.error != null) {
                     ErrorMessage(
                         message = uiState.error!!,
-                        onRetry = { 
-                            viewModel.loadStockInfo()
-                        },
-                        modifier = Modifier.padding(16.dp)
+                        onRetry = { viewModel.loadStockInfo() },
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .padding(16.dp)
+                            .background(SecondaryDark.copy(alpha = 0.9f), RoundedCornerShape(8.dp))
                     )
                 }
             }
@@ -160,24 +158,26 @@ fun StockDetailHeader(
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
-                    text = "₩${String.format("%,.0f", currentPrice)}",
+                    text = if (currentPrice > 0) "$${String.format("%,.2f", currentPrice)}" else "Loading...",
                     style = MaterialTheme.typography.displayLarge,
                     color = Color.White,
                     fontWeight = FontWeight.Bold
                 )
 
-                val changeColor = if (changePercent >= 0) Positive else Negative
-                Box(
-                    modifier = Modifier
-                        .background(changeColor.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        text = "${if (changeAmount >= 0) "+" else ""}${String.format("%,.0f", changeAmount)} (${if (changePercent >= 0) "+" else ""}${String.format("%.2f", changePercent)}%)",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = changeColor,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                if (currentPrice > 0) {
+                    val changeColor = if (changePercent >= 0) Positive else Negative
+                    Box(
+                        modifier = Modifier
+                            .background(changeColor.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = "${if (changeAmount >= 0) "+" else ""}${String.format("%,.2f", changeAmount)} (${if (changePercent >= 0) "+" else ""}${String.format("%.2f", changePercent)}%)",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = changeColor,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
             }
 
@@ -192,45 +192,5 @@ fun StockDetailHeader(
     }
 }
 
-@Composable
-fun TabNavigation(
-    selectedTab: Int,
-    onTabSelected: (Int) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val tabs = listOf("📈 차트", "📊 재무제표", "📐 투자지표", "💰 배당정보", "🔮 AI 예측")
-
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = SecondaryDark),
-        shape = RoundedCornerShape(10.dp)
-    ) {
-        LazyRow(
-            modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(tabs.size) { index ->
-                val tab = tabs[index]
-                val isSelected = index == selectedTab
-                Button(
-                    onClick = { onTabSelected(index) },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isSelected) TertiaryDark else Color.Transparent,
-                        contentColor = if (isSelected) AccentCyan else TextSecondary
-                    ),
-                    shape = RoundedCornerShape(6.dp),
-                    contentPadding = PaddingValues(vertical = 10.dp, horizontal = 16.dp)
-                ) {
-                    Text(
-                        text = tab,
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                        maxLines = 1
-                    )
-                }
-            }
-        }
-    }
-}
+// TabNavigation removed
 
