@@ -83,43 +83,12 @@ fun StockDetailScreen(
                 )
             }
 
-            // Tab Navigation
+            // Chart Section
             item {
-                TabNavigation(
-                    selectedTab = uiState.selectedTab,
-                    onTabSelected = { viewModel.selectTab(it) },
-                    modifier = Modifier.padding(16.dp)
-                )
-            }
-
-            // Tab Content
-            item {
-                when (uiState.selectedTab) {
-                    0 -> ChartTab(
-                        history = uiState.history,
-                        indicators = uiState.indicators,
-                        selectedPeriod = uiState.selectedPeriod,
-                        onPeriodSelected = { viewModel.selectPeriod(it) },
-                        isLoading = uiState.isChartLoading
-                    )
-                    1 -> FinancialTab(
-                        financials = uiState.financials,
-                        selectedType = uiState.selectedFinancialType,
-                        onTypeSelected = { viewModel.selectFinancialType(it) },
-                        isLoading = uiState.isLoading
-                    )
-                    2 -> MetricsTab(
-                        metrics = uiState.metrics,
-                        isLoading = uiState.isLoading
-                    )
-                    3 -> DividendTab(
-                        dividend = uiState.dividend,
-                        isLoading = uiState.isLoading
-                    )
-                    4 -> PredictionTab(
-                        prediction = uiState.prediction,
-                        onLoadPrediction = { viewModel.loadPredictionData(it) },
-                        isLoading = uiState.isLoading
+                Spacer(modifier = Modifier.height(16.dp))
+                Box(modifier = Modifier.fillParentMaxHeight(0.8f)) {
+                    ChartTab(
+                        symbol = uiState.ticker
                     )
                 }
             }
@@ -131,7 +100,6 @@ fun StockDetailScreen(
                         message = uiState.error!!,
                         onRetry = { 
                             viewModel.loadStockInfo()
-                            viewModel.loadChartData() 
                         },
                         modifier = Modifier.padding(16.dp)
                     )
@@ -237,23 +205,22 @@ fun TabNavigation(
         colors = CardDefaults.cardColors(containerColor = SecondaryDark),
         shape = RoundedCornerShape(10.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            tabs.forEachIndexed { index, tab ->
+            items(tabs.size) { index ->
+                val tab = tabs[index]
                 val isSelected = index == selectedTab
                 Button(
                     onClick = { onTabSelected(index) },
-                    modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = if (isSelected) TertiaryDark else Color.Transparent,
                         contentColor = if (isSelected) AccentCyan else TextSecondary
                     ),
                     shape = RoundedCornerShape(6.dp),
-                    contentPadding = PaddingValues(vertical = 12.dp, horizontal = 4.dp)
+                    contentPadding = PaddingValues(vertical = 10.dp, horizontal = 16.dp)
                 ) {
                     Text(
                         text = tab,

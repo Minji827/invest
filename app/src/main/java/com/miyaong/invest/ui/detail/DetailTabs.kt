@@ -9,18 +9,32 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.toArgb
 import com.miyaong.invest.data.model.*
 import com.miyaong.invest.ui.components.*
 import com.miyaong.invest.ui.theme.*
 import com.miyaong.invest.util.FormatUtils
+
+import com.patrykandpatrick.vico.compose.cartesian.*
+import com.patrykandpatrick.vico.compose.cartesian.axis.*
+import com.patrykandpatrick.vico.compose.cartesian.layer.*
+import com.patrykandpatrick.vico.compose.cartesian.marker.*
+import com.patrykandpatrick.vico.compose.common.*
+import com.patrykandpatrick.vico.compose.common.component.*
+import com.patrykandpatrick.vico.compose.common.shader.*
+import com.patrykandpatrick.vico.core.cartesian.data.*
+import com.patrykandpatrick.vico.core.cartesian.marker.*
+import com.patrykandpatrick.vico.core.common.Dimensions
+import com.patrykandpatrick.vico.core.common.component.Shadow
+import com.patrykandpatrick.vico.core.common.shape.Shape
 
 import java.time.Instant
 import java.time.ZoneId
@@ -32,213 +46,198 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.platform.LocalContext
 
 @Composable
 fun ChartTab(
-    history: List<StockHistory>,
-    indicators: List<TechnicalIndicator>,
-    selectedPeriod: String,
-    onPeriodSelected: (String) -> Unit,
-    isLoading: Boolean,
+    symbol: String,
     modifier: Modifier = Modifier
 ) {
-    val (maChecked, onMaChanged) = rememberSaveable { mutableStateOf(true) }
-    val (bbChecked, onBbChanged) = rememberSaveable { mutableStateOf(false) }
-    val (rsiChecked, onRsiChanged) = rememberSaveable { mutableStateOf(false) }
-    val (macdChecked, onMacdChanged) = rememberSaveable { mutableStateOf(false) }
-
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Period Selector
-        PeriodSelector(
-            periods = listOf("1M", "3M", "6M", "1Y", "5Y", "전체"),
-            selectedPeriod = selectedPeriod,
-            onPeriodSelected = onPeriodSelected
-        )
-
-        // Indicator Toggles
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IndicatorToggle(checked = maChecked, onCheckedChange = onMaChanged, label = "이동평균선")
-            IndicatorToggle(checked = bbChecked, onCheckedChange = onBbChanged, label = "볼린저밴드")
-            IndicatorToggle(checked = rsiChecked, onCheckedChange = onRsiChanged, label = "RSI")
-            IndicatorToggle(checked = macdChecked, onCheckedChange = onMacdChanged, label = "MACD")
-        }
-
-        // Chart
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(400.dp),
-            colors = CardDefaults.cardColors(containerColor = SecondaryDark),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            if (isLoading) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    LoadingIndicator()
-                }
-            } else if (history.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        Text("📊", style = MaterialTheme.typography.displayLarge)
-                        Text(
-                            "차트 데이터가 없습니다.",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = TextDim
-                        )
-                    }
-                }
-            } else {
-                // Vico Chart Implementation (1.15.0)
-                val chartEntryModelProducer = remember { com.patrykandpatrick.vico.core.entry.ChartEntryModelProducer() }
-
-                LaunchedEffect(history) {
-                    chartEntryModelProducer.setEntries(
-                        history.mapIndexed { index, item ->
-                            com.patrykandpatrick.vico.core.entry.entryOf(index.toFloat(), item.close.toFloat())
-                        }
-                    )
-                }
-
-                com.patrykandpatrick.vico.compose.chart.Chart(
-                    chart = com.patrykandpatrick.vico.compose.chart.line.lineChart(),
-                    chartModelProducer = chartEntryModelProducer,
-                    startAxis = com.patrykandpatrick.vico.compose.axis.vertical.rememberStartAxis(),
-                    bottomAxis = com.patrykandpatrick.vico.compose.axis.horizontal.rememberBottomAxis(
-                        valueFormatter = { value, _ ->
-                            val index = value.toInt()
-                            if (index in history.indices && index % (history.size / 5 + 1) == 0) {
-                                history[index].date.takeLast(5)
-                            } else {
-                                ""
-                            }
-                        }
-                    ),
-                    modifier = Modifier.padding(16.dp)
-                )
-            }
+    val context = LocalContext.current
+    
+    // TradingView Ticker Formatting
+    val formattedSymbol = remember(symbol) {
+        when {
+            symbol.endsWith(".KS") -> "KRX:${symbol.removeSuffix(".KS")}"
+            symbol.endsWith(".KQ") -> "KOSDAQ:${symbol.removeSuffix(".KQ")}"
+            else -> symbol // Default (mostly US)
         }
     }
-}
 
-@Composable
-private fun IndicatorToggle(
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    label: String
-) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .border(1.dp, AccentPurple.copy(alpha = 0.3f), RoundedCornerShape(6.dp))
-            .clip(RoundedCornerShape(6.dp))
-            .background(AccentPurple.copy(alpha = 0.1f))
-            .clickable { onCheckedChange(!checked) }
-            .padding(horizontal = 10.dp, vertical = 4.dp)
+    val htmlContent = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+            <style>
+                body { margin: 0; padding: 0; background-color: #121212; height: 100vh; }
+                .tradingview-widget-container { height: 100%; width: 100%; }
+            </style>
+        </head>
+        <body>
+            <div class="tradingview-widget-container">
+                <div id="tradingview_widget"></div>
+                <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+                <script type="text/javascript">
+                    new TradingView.widget({
+                        "autosize": true,
+                        "symbol": "$formattedSymbol",
+                        "interval": "D",
+                        "timezone": "Asia/Seoul",
+                        "theme": "dark",
+                        "style": "1",
+                        "locale": "kr",
+                        "toolbar_bg": "#f1f3f6",
+                        "enable_publishing": false,
+                        "hide_side_toolbar": false,
+                        "allow_symbol_change": false,
+                        "container_id": "tradingview_widget",
+                        "studies": [
+                            "MASimple@tv-basicstudies",
+                            "RSI@tv-basicstudies"
+                         ]
+                    });
+                </script>
+            </div>
+        </body>
+        </html>
+    """.trimIndent()
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = SecondaryDark),
+        shape = androidx.compose.ui.graphics.RectangleShape
     ) {
-        Checkbox(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            colors = CheckboxDefaults.colors(
-                checkedColor = AccentPurple,
-                uncheckedColor = TextSecondary,
-                checkmarkColor = PrimaryDark
-            )
+        AndroidView(
+            factory = { ctx ->
+                android.webkit.WebView(ctx).apply {
+                    layoutParams = android.view.ViewGroup.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+                    settings.loadWithOverviewMode = false
+                    settings.useWideViewPort = false
+                    settings.userAgentString = "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36"
+                    settings.layoutAlgorithm = android.webkit.WebSettings.LayoutAlgorithm.TEXT_AUTOSIZING
+                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                    
+                    loadDataWithBaseURL("https://www.tradingview.com", htmlContent, "text/html", "UTF-8", null)
+                }
+            },
+            update = { webView ->
+                // Optimize: prevent reloading if symbol hasn't changed? 
+                // For now, simple loading is fine.
+            },
+            modifier = Modifier.fillMaxSize()
         )
-        Text(text = label, style = MaterialTheme.typography.labelMedium, color = TextSecondary)
     }
 }
 
 @Composable
 fun FinancialTab(
     financials: List<FinancialStatement>,
+    balanceSheet: List<BalanceSheet>,
+    cashFlow: List<CashFlow>,
     selectedType: String,
     onTypeSelected: (String) -> Unit,
     isLoading: Boolean,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            PeriodSelector(
-                periods = listOf("손익계산서", "재무상태표", "현금흐름표"),
-                selectedPeriod = "손익계산서",
-                onPeriodSelected = {}
-            )
-            Spacer(modifier = Modifier.weight(1f))
-            PeriodSelector(
-                periods = listOf("분기", "연간"),
-                selectedPeriod = if (selectedType == "quarterly") "분기" else "연간",
-                onPeriodSelected = { onTypeSelected(if (it == "분기") "quarterly" else "annual") }
-            )
-        }
+    var selectedCategory by remember { mutableStateOf("손익계산서") }
 
-        if (isLoading) {
+    if (isLoading) {
+        Box(modifier = modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
             LoadingIndicator()
-        } else if (financials.isEmpty()) {
-            Card(
-                modifier = Modifier.fillMaxWidth().height(300.dp),
-                colors = CardDefaults.cardColors(containerColor = SecondaryDark)
+        }
+    } else {
+        Column(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Category & Type Selectors
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("재무제표 데이터 없음", color = TextDim)
+                PeriodSelector(
+                    periods = listOf("손익계산서", "재무상태표", "현금흐름표"),
+                    selectedPeriod = selectedCategory,
+                    onPeriodSelected = { selectedCategory = it }
+                )
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    PeriodSelector(
+                        periods = listOf("연간", "분기"),
+                        selectedPeriod = if (selectedType == "annual") "연간" else "분기",
+                        onPeriodSelected = { onTypeSelected(if (it == "연간") "annual" else "quarterly") }
+                    )
                 }
             }
-        } else {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = SecondaryDark),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Column {
-                    // Header
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(TertiaryDark)
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            "항목",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = TextDim,
-                            modifier = Modifier.weight(2f)
-                        )
-                        financials.take(4).forEach { financial ->
-                            Text(
-                                financial.period,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = TextDim,
-                                modifier = Modifier.weight(1f)
-                            )
+            
+            HorizontalDivider(color = BorderColor.copy(alpha = 0.3f))
+            
+            // Content
+            when (selectedCategory) {
+                "손익계산서" -> {
+                    if (financials.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                            Text("손익계산서 데이터가 없습니다.", color = TextDim)
+                        }
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                            FinancialHeaderRow(financials.map { it.period })
+                            HorizontalDivider(color = BorderColor.copy(alpha = 0.1f))
+
+                            FinancialRow("매출액", financials.map { it.revenue })
+                            FinancialRow("매출원가", financials.map { it.costOfRevenue })
+                            FinancialRow("매출총이익", financials.map { it.grossProfit }, highlight = true)
+                            FinancialRow("영업비용", financials.map { it.operatingExpense })
+                            FinancialRow("영업이익", financials.map { it.operatingIncome }, highlight = true)
+                            FinancialRow("당기순이익", financials.map { it.netIncome }, highlight = true, primary = true)
                         }
                     }
+                }
+                "재무상태표" -> {
+                    if (balanceSheet.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                            Text("재무상태표 데이터가 없습니다.", color = TextDim)
+                        }
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                            FinancialHeaderRow(balanceSheet.map { it.period })
+                            HorizontalDivider(color = BorderColor.copy(alpha = 0.1f))
 
-                    HorizontalDivider(color = BorderColor)
+                            FinancialRow("자산총계", balanceSheet.map { it.totalAssets }, highlight = true)
+                            FinancialRow("부채총계", balanceSheet.map { it.totalLiabilities })
+                            FinancialRow("자본총계", balanceSheet.map { it.totalEquity }, highlight = true)
+                            FinancialRow("총차입금", balanceSheet.map { it.totalDebt })
+                        }
+                    }
+                }
+                "현금흐름표" -> {
+                    if (cashFlow.isEmpty()) {
+                        Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                            Text("현금흐름표 데이터가 없습니다.", color = TextDim)
+                        }
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                            FinancialHeaderRow(cashFlow.map { it.period })
+                            HorizontalDivider(color = BorderColor.copy(alpha = 0.1f))
 
-                    // Rows
-                    FinancialRow("매출액", financials.map { it.revenue })
-                    FinancialRow("매출원가", financials.map { it.costOfRevenue })
-                    FinancialRow("매출총이익", financials.map { it.grossProfit }, highlight = true)
-                    FinancialRow("영업비용", financials.map { it.operatingExpense })
-                    FinancialRow("영업이익", financials.map { it.operatingIncome }, highlight = true)
-                    FinancialRow("당기순이익", financials.map { it.netIncome }, highlight = true, primary = true)
+                            FinancialRow("영업활동 현금흐름", cashFlow.map { it.operatingCashFlow }, highlight = true)
+                            FinancialRow("투자활동 현금흐름", cashFlow.map { it.investingCashFlow })
+                            FinancialRow("재무활동 현금흐름", cashFlow.map { it.financingCashFlow })
+                            FinancialRow("잉여현금흐름 (FCF)", cashFlow.map { it.freeCashFlow }, highlight = true, primary = true)
+                        }
+                    }
                 }
             }
         }
@@ -277,6 +276,30 @@ fun FinancialRow(
         }
     }
     HorizontalDivider(color = BorderColor.copy(alpha = 0.3f))
+}
+
+@Composable
+fun FinancialHeaderRow(periods: List<String>) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(SecondaryDark)
+            .padding(vertical = 8.dp, horizontal = 16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Spacer(modifier = Modifier.weight(2f)) // Align with label column
+        periods.take(4).forEach { period ->
+            Text(
+                period,
+                style = MaterialTheme.typography.labelSmall,
+                color = TextDim,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.End,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
 }
 
 @Composable
