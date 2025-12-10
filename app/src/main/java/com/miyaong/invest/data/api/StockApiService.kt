@@ -47,6 +47,27 @@ interface StockApiService {
         @Query("ticker") ticker: String
     ): ApiResponse<DividendInfo>
 
+    @GET("stock/financials")
+    suspend fun getFinancials(
+        @Query("ticker") ticker: String,
+        @Query("sheet") sheet: String = "income",
+        @Query("freq") freq: String = "annual"
+    ): ApiResponse<List<FinancialStatement>>
+
+    @GET("stock/financials")
+    suspend fun getBalanceSheet(
+        @Query("ticker") ticker: String,
+        @Query("sheet") sheet: String = "balance",
+        @Query("freq") freq: String = "annual"
+    ): ApiResponse<List<BalanceSheet>>
+
+    @GET("stock/financials")
+    suspend fun getCashFlow(
+        @Query("ticker") ticker: String,
+        @Query("sheet") sheet: String = "cash",
+        @Query("freq") freq: String = "annual"
+    ): ApiResponse<List<CashFlow>>
+
     // AI 주가 예측
     @POST("api/stock/predict")
     suspend fun predictStock(

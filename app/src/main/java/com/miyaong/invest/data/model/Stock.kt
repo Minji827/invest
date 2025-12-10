@@ -123,17 +123,45 @@ data class FinancialStatement(
     @SerialName("period")
     val period: String,
     @SerialName("revenue")
-    val revenue: Long,
+    val revenue: Long = 0,
     @SerialName("costOfRevenue")
-    val costOfRevenue: Long,
+    val costOfRevenue: Long = 0,
     @SerialName("grossProfit")
-    val grossProfit: Long,
+    val grossProfit: Long = 0,
     @SerialName("operatingExpense")
-    val operatingExpense: Long,
+    val operatingExpense: Long = 0,
     @SerialName("operatingIncome")
-    val operatingIncome: Long,
+    val operatingIncome: Long = 0,
     @SerialName("netIncome")
-    val netIncome: Long
+    val netIncome: Long = 0
+)
+
+@Serializable
+data class BalanceSheet(
+    @SerialName("period")
+    val period: String,
+    @SerialName("totalAssets")
+    val totalAssets: Long = 0,
+    @SerialName("totalLiabilities")
+    val totalLiabilities: Long = 0,
+    @SerialName("totalEquity")
+    val totalEquity: Long = 0,
+    @SerialName("totalDebt")
+    val totalDebt: Long = 0
+)
+
+@Serializable
+data class CashFlow(
+    @SerialName("period")
+    val period: String,
+    @SerialName("operatingCashFlow")
+    val operatingCashFlow: Long = 0,
+    @SerialName("investingCashFlow")
+    val investingCashFlow: Long = 0,
+    @SerialName("financingCashFlow")
+    val financingCashFlow: Long = 0,
+    @SerialName("freeCashFlow")
+    val freeCashFlow: Long = 0
 )
 
 @Serializable
