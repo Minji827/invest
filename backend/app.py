@@ -1028,7 +1028,7 @@ def train_buy_price_model(symbol, df):
 
     if len(df_features) < 60:
         print(f"Not enough data to train buy model for {symbol}")
-        return None, None
+        return None, None, 0.0
 
     # Features for prediction
     feature_cols = ['rsi', 'bb_position', 'bb_width', 'volatility',
@@ -1047,7 +1047,7 @@ def train_buy_price_model(symbol, df):
 
     if len(X) < 30:
         print(f"Not enough training samples for {symbol}")
-        return None, None
+        return None, None, 0.0
 
     # Train model
     scaler = StandardScaler()
@@ -1062,15 +1062,16 @@ def train_buy_price_model(symbol, df):
     model.fit(X_scaled, y)
 
     # Calculate model confidence (R² on training data)
-    r2 = r2_score(y, y_pred=model.predict(X_scaled))
+    y_pred = model.predict(X_scaled)
+    r2 = r2_score(y, y_pred)
 
     # Save the model and scaler
     if not os.path.exists(MODELS_DIR):
         os.makedirs(MODELS_DIR)
-        
+
     joblib.dump(model, os.path.join(MODELS_DIR, f"{symbol}_buy_price_model.joblib"))
     joblib.dump(scaler, os.path.join(MODELS_DIR, f"{symbol}_buy_price_scaler.joblib"))
-    
+
     print(f"Successfully trained and saved buy price model for {symbol} with R²={r2:.2f}")
 
     return model, scaler, r2
@@ -1132,29 +1133,41 @@ def get_buy_recommendation():
         atr = latest['atr']
 
         # Calculate buy prices for each risk level
-        aggressive_price = current_price * (1 + ml_predicted_dip / 100 * 0.3) if ml_predicted_dip < 0 else current_price * 0.97
-        aggressive_price = max(aggressive_price, current_price - atr * 0.5)
+        # ML predicted dip is negative when price is expected to drop
+        # Use ML prediction only if it suggests a price drop (negative dip)
+        ml_based_aggressive = current_price * (1 + max(ml_predicted_dip, -10) / 100 * 0.3) if ml_predicted_dip < 0 else current_price * 0.97
+        atr_based_aggressive = current_price - atr * 0.5
+        aggressive_price = min(current_price * 0.99, max(ml_based_aggressive, atr_based_aggressive, current_price * 0.95))
 
+        # Moderate: Average of support levels, BB lower, and ML prediction
+        ml_based_moderate = current_price * (1 + max(ml_predicted_dip, -15) / 100 * 0.6) if ml_predicted_dip < 0 else current_price * 0.95
         moderate_factors = [
             nearest_support,
             bb_lower,
-            current_price * (1 + ml_predicted_dip / 100 * 0.6) if ml_predicted_dip < 0 else current_price * 0.95,
+            ml_based_moderate,
             latest['ma20'] if latest['ma20'] < current_price else current_price * 0.95
         ]
-        moderate_price = np.mean([f for f in moderate_factors if f < current_price]) if any(f < current_price for f in moderate_factors) else current_price * 0.95
+        # Filter factors that are below current price
+        valid_moderate_factors = [f for f in moderate_factors if f < current_price and f > current_price * 0.80]
+        moderate_price = np.mean(valid_moderate_factors) if valid_moderate_factors else current_price * 0.95
 
+        # Conservative: Strongest support levels
+        ml_based_conservative = current_price * (1 + max(ml_predicted_dip, -20) / 100) if ml_predicted_dip < 0 else current_price * 0.90
         conservative_factors = [
             bb_lower * 0.98,
             low_52week * 1.05,
-            current_price * (1 + ml_predicted_dip / 100) if ml_predicted_dip < 0 else current_price * 0.90,
+            ml_based_conservative,
             latest['ma60'] if latest['ma60'] < current_price else current_price * 0.90
         ]
-        conservative_price = np.mean([f for f in conservative_factors if f < current_price]) if any(f < current_price for f in conservative_factors) else current_price * 0.90
-        
-        # Ensure price order
-        conservative_price = min(conservative_price, moderate_price * 0.95)
-        moderate_price = min(moderate_price, aggressive_price * 0.97)
+        # Filter factors that are below current price
+        valid_conservative_factors = [f for f in conservative_factors if f < current_price and f > current_price * 0.70]
+        conservative_price = np.mean(valid_conservative_factors) if valid_conservative_factors else current_price * 0.90
+
+        # Ensure price order: conservative < moderate < aggressive < current
+        # and all are below current price
         aggressive_price = min(aggressive_price, current_price * 0.99)
+        moderate_price = min(moderate_price, aggressive_price * 0.97, current_price * 0.95)
+        conservative_price = min(conservative_price, moderate_price * 0.95, current_price * 0.90)
         
         result = {
             "ticker": ticker,
