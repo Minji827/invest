@@ -163,17 +163,17 @@ class StockRepository @Inject constructor(
         }
     }
 
-    // 서킷브레이커 확률
-    suspend fun getCircuitBreakerProbability(): Result<CircuitBreakerData> {
+    // LULD 임박 종목
+    suspend fun getVolatilityWatch(): Result<VolatilityWatchData> {
         return try {
-            val response = stockApi.getCircuitBreakerProbability()
+            val response = stockApi.getVolatilityWatch()
             if (response.success && response.data != null) {
                 Result.Success(response.data)
             } else {
                 Result.Error(Exception(response.message ?: "Unknown error"))
             }
         } catch (e: Exception) {
-            android.util.Log.e("StockRepository", "CircuitBreaker Error: ${e.message}", e)
+            android.util.Log.e("StockRepository", "VolatilityWatch Error: ${e.message}", e)
             Result.Error(e)
         }
     }

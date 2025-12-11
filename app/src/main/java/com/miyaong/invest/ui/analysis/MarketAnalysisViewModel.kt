@@ -3,10 +3,9 @@ package com.miyaong.invest.ui.analysis
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.miyaong.invest.data.model.BuyRecommendation
-import com.miyaong.invest.data.model.CircuitBreakerData
-import com.miyaong.invest.data.model.PredictionResult
 import com.miyaong.invest.data.model.Result
 import com.miyaong.invest.data.model.TradingHaltsData
+import com.miyaong.invest.data.model.VolatilityWatchData
 import com.miyaong.invest.data.repository.StockRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,11 +17,8 @@ import javax.inject.Inject
 
 data class MarketAnalysisUiState(
     val isLoading: Boolean = false,
-    val circuitBreaker: CircuitBreakerData? = null,
+    val volatilityWatch: VolatilityWatchData? = null,
     val tradingHalts: TradingHaltsData? = null,
-    val predictionTicker: String = "SPY",
-    val prediction: PredictionResult? = null,
-    val isPredicting: Boolean = false,
     val buyTicker: String = "AAPL",
     val buyRecommendation: BuyRecommendation? = null,
     val isBuyLoading: Boolean = false,
@@ -45,13 +41,13 @@ class MarketAnalysisViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
 
-            // 서킷브레이커 확률 로드
-            when (val result = repository.getCircuitBreakerProbability()) {
+            // 변동성 주의 종목 로드
+            when (val result = repository.getVolatilityWatch()) {
                 is Result.Success -> {
-                    _uiState.update { it.copy(circuitBreaker = result.data) }
+                    _uiState.update { it.copy(volatilityWatch = result.data) }
                 }
                 is Result.Error -> {
-                    // 에러 시 기본값 사용
+                    // 에러 시 무시
                 }
                 else -> {}
             }
@@ -68,36 +64,6 @@ class MarketAnalysisViewModel @Inject constructor(
             }
 
             _uiState.update { it.copy(isLoading = false) }
-        }
-    }
-
-    fun setPredictionTicker(ticker: String) {
-        _uiState.update { it.copy(predictionTicker = ticker) }
-    }
-
-    fun predictStock() {
-        val ticker = _uiState.value.predictionTicker
-        if (ticker.isBlank()) return
-
-        viewModelScope.launch {
-            _uiState.update { it.copy(isPredicting = true, error = null) }
-
-            when (val result = repository.predictStock(ticker, 7)) {
-                is Result.Success -> {
-                    _uiState.update { it.copy(prediction = result.data, isPredicting = false) }
-                }
-                is Result.Error -> {
-                    _uiState.update {
-                        it.copy(
-                            error = "예측 실패: ${result.exception.message}",
-                            isPredicting = false
-                        )
-                    }
-                }
-                else -> {
-                    _uiState.update { it.copy(isPredicting = false) }
-                }
-            }
         }
     }
 

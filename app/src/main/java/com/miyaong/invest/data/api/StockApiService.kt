@@ -85,9 +85,9 @@ interface StockApiService {
     @GET("api/stock/trending")
     suspend fun getTrendingStocks(): ApiResponse<TrendingStocksData>
 
-    // 시장 서킷브레이커 확률
-    @GET("api/market/circuit-breaker")
-    suspend fun getCircuitBreakerProbability(): ApiResponse<CircuitBreakerData>
+    // LULD 임박 종목 (변동성 주의)
+    @GET("api/market/volatility-watch")
+    suspend fun getVolatilityWatch(): ApiResponse<VolatilityWatchData>
 
     // AI 매수단가 추천
     @GET("api/stock/buy-recommendation")

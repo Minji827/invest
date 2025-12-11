@@ -1257,73 +1257,85 @@ def get_trading_halts():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-# ============== Circuit Breaker Probability ==============
 
-@app.route('/api/market/circuit-breaker', methods=['GET'])
-@cache.cached(timeout=60)
-def get_circuit_breaker_probability():
-    """Get market circuit breaker probability based on index movement"""
+# ============== Volatility Watch (LULD Imminent) ==============
+
+@app.route('/api/market/volatility-watch', methods=['GET'])
+@cache.cached(timeout=60) # Cache for 1 minute
+def get_volatility_watch():
+    """
+    Identifies stocks with high short-term volatility, potentially 
+    approaching an LULD halt.
+    This is a proxy, not a perfect replication of LULD rules.
+    """
     try:
-        # Fetch S&P 500 data as market proxy
-        spy = yf.Ticker("SPY")
-        hist = spy.history(period="5d")
+        # 1. Get a list of highly active stocks to monitor
+        active_stocks = _fetch_yahoo_screener('most_actives')
+        if not active_stocks:
+            return jsonify({"success": True, "data": {"upward_watch": [], "downward_watch": []}})
 
-        if hist.empty or len(hist) < 2:
-            return jsonify({"success": False, "error": "Could not fetch market data"}), 500
+        upward_watch = []
+        downward_watch = []
+        
+        # Threshold for significant 5-minute change
+        THRESHOLD_PERCENT = 3.0
 
-        current_price = hist['Close'].iloc[-1]
-        previous_close = hist['Close'].iloc[-2]
+        # Use a thread pool to fetch intraday data concurrently
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            future_to_stock = {executor.submit(yf.Ticker(stock['symbol']).history, period="1d", interval="5m"): stock for stock in active_stocks}
 
-        # Calculate daily change
-        daily_change = ((current_price - previous_close) / previous_close) * 100
+            for future in as_completed(future_to_stock):
+                stock_info = future_to_stock[future]
+                try:
+                    hist = future.result()
+                    if hist is None or len(hist) < 2:
+                        continue
 
-        # Circuit breaker thresholds (based on S&P 500 rules)
-        threshold1 = -7.0   # Level 1: 15-min halt
-        threshold2 = -13.0  # Level 2: 15-min halt
-        threshold3 = -20.0  # Level 3: Market closes
+                    # 2. Calculate the most recent 5-minute change
+                    last_price = hist['Close'].iloc[-1]
+                    previous_price = hist['Close'].iloc[-2]
+                    
+                    if pd.isna(last_price) or pd.isna(previous_price) or previous_price == 0:
+                        continue
+                        
+                    change_percent = ((last_price - previous_price) / previous_price) * 100
 
-        # Determine current level
-        if daily_change <= threshold3:
-            current_level = 3
-        elif daily_change <= threshold2:
-            current_level = 2
-        elif daily_change <= threshold1:
-            current_level = 1
-        else:
-            current_level = 0
-
-        # Calculate probability based on current trajectory and volatility
-        # Get intraday volatility
-        intraday_range = (hist['High'].iloc[-1] - hist['Low'].iloc[-1]) / previous_close * 100
-
-        # Simple probability model based on current decline and volatility
-        if daily_change >= 0:
-            probability = max(0, 5 - daily_change)  # Very low if market is up
-        else:
-            # Probability increases as we approach thresholds
-            distance_to_level1 = abs(daily_change - threshold1)
-            probability = min(100, max(0,
-                (abs(daily_change) / 7 * 30) +  # Base probability from decline
-                (intraday_range * 5) +           # Add volatility factor
-                (20 if current_level >= 1 else 0) # Boost if already triggered
-            ))
+                    # 3. Check if the change exceeds the threshold
+                    if change_percent > THRESHOLD_PERCENT:
+                        upward_watch.append({
+                            "symbol": stock_info['symbol'],
+                            "name": stock_info['shortName'],
+                            "changePercent": round(change_percent, 2),
+                            "currentPrice": round(last_price, 2)
+                        })
+                    elif change_percent < -THRESHOLD_PERCENT:
+                        downward_watch.append({
+                            "symbol": stock_info['symbol'],
+                            "name": stock_info['shortName'],
+                            "changePercent": round(change_percent, 2),
+                            "currentPrice": round(last_price, 2)
+                        })
+                except Exception as e:
+                    # This can happen if a ticker from the screener has no intraday data
+                    # print(f"Could not process intraday for {stock_info['symbol']}: {e}")
+                    pass
+        
+        # Sort by the magnitude of the change
+        upward_watch.sort(key=lambda x: x['changePercent'], reverse=True)
+        downward_watch.sort(key=lambda x: x['changePercent'])
 
         result = {
-            "market": "S&P 500 (SPY)",
-            "currentLevel": current_level,
-            "probability": round(probability, 1),
-            "indexValue": round(current_price, 2),
-            "indexChange": round(daily_change, 2),
-            "threshold1": threshold1,
-            "threshold2": threshold2,
-            "threshold3": threshold3,
+            "upward_watch": upward_watch,
+            "downward_watch": downward_watch,
             "timestamp": int(datetime.now().timestamp() * 1000)
         }
-
+        
         return jsonify({"success": True, "data": result})
 
     except Exception as e:
-        print(f"Circuit breaker error: {e}")
+        print(f"Volatility watch error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -1355,7 +1367,7 @@ def home():
             "/api/macro/exchange",
             "/api/macro/dollar-index",
             "/api/macro/all",
-            "/api/market/circuit-breaker",
+            "/api/market/volatility-watch",
             "/api/market/trading-halts"
         ]
     })
