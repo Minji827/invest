@@ -178,6 +178,21 @@ class StockRepository @Inject constructor(
         }
     }
 
+    // AI 매수단가 추천
+    suspend fun getBuyRecommendation(ticker: String): Result<BuyRecommendation> {
+        return try {
+            val response = stockApi.getBuyRecommendation(ticker)
+            if (response.success && response.data != null) {
+                Result.Success(response.data)
+            } else {
+                Result.Error(Exception(response.message ?: "Unknown error"))
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("StockRepository", "BuyRecommendation Error: ${e.message}", e)
+            Result.Error(e)
+        }
+    }
+
     // 즐겨찾기
     fun getAllFavorites() = favoriteDao.getAllFavorites()
 

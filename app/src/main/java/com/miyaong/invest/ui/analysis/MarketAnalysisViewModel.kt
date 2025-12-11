@@ -2,6 +2,7 @@ package com.miyaong.invest.ui.analysis
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.miyaong.invest.data.model.BuyRecommendation
 import com.miyaong.invest.data.model.CircuitBreakerData
 import com.miyaong.invest.data.model.PredictionResult
 import com.miyaong.invest.data.model.Result
@@ -20,6 +21,9 @@ data class MarketAnalysisUiState(
     val predictionTicker: String = "SPY",
     val prediction: PredictionResult? = null,
     val isPredicting: Boolean = false,
+    val buyTicker: String = "AAPL",
+    val buyRecommendation: BuyRecommendation? = null,
+    val isBuyLoading: Boolean = false,
     val error: String? = null
 )
 
@@ -79,6 +83,36 @@ class MarketAnalysisViewModel @Inject constructor(
                 }
                 else -> {
                     _uiState.update { it.copy(isPredicting = false) }
+                }
+            }
+        }
+    }
+
+    fun setBuyTicker(ticker: String) {
+        _uiState.update { it.copy(buyTicker = ticker) }
+    }
+
+    fun getBuyRecommendation() {
+        val ticker = _uiState.value.buyTicker
+        if (ticker.isBlank()) return
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isBuyLoading = true, error = null) }
+
+            when (val result = repository.getBuyRecommendation(ticker)) {
+                is Result.Success -> {
+                    _uiState.update { it.copy(buyRecommendation = result.data, isBuyLoading = false) }
+                }
+                is Result.Error -> {
+                    _uiState.update {
+                        it.copy(
+                            error = "매수단가 분석 실패: ${result.exception.message}",
+                            isBuyLoading = false
+                        )
+                    }
+                }
+                else -> {
+                    _uiState.update { it.copy(isBuyLoading = false) }
                 }
             }
         }

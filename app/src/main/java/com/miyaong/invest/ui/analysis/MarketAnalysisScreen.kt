@@ -61,6 +61,19 @@ fun MarketAnalysisScreen(
             )
         }
 
+        // 매수단가 추천 섹션
+        item {
+            BuyRecommendationSection(
+                ticker = uiState.buyTicker,
+                onTickerChange = { viewModel.setBuyTicker(it) },
+                onAnalyze = { viewModel.getBuyRecommendation() },
+                recommendation = uiState.buyRecommendation,
+                isLoading = uiState.isBuyLoading,
+                error = uiState.error,
+                onStockClick = onStockClick
+            )
+        }
+
         // 주가 예측 섹션
         item {
             PredictionSection(
@@ -252,6 +265,289 @@ private fun CircuitLevel(
             text = threshold,
             style = MaterialTheme.typography.bodySmall,
             color = TextDim
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BuyRecommendationSection(
+    ticker: String,
+    onTickerChange: (String) -> Unit,
+    onAnalyze: () -> Unit,
+    recommendation: com.miyaong.invest.data.model.BuyRecommendation?,
+    isLoading: Boolean,
+    error: String?,
+    onStockClick: (String, String) -> Unit
+) {
+    val focusManager = LocalFocusManager.current
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = SecondaryDark),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp)
+        ) {
+            Text(
+                text = "AI 매수단가 추천",
+                style = MaterialTheme.typography.titleMedium,
+                color = TextPrimary,
+                fontWeight = FontWeight.Bold
+            )
+
+            Text(
+                text = "머신러닝 기반 최적 매수가 분석",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextDim
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 티커 입력
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = ticker,
+                    onValueChange = onTickerChange,
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text("티커 입력 (예: AAPL)", color = TextDim) },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = AccentCyan,
+                        unfocusedBorderColor = BorderColor,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        cursorColor = AccentCyan
+                    ),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(
+                        onSearch = {
+                            focusManager.clearFocus()
+                            onAnalyze()
+                        }
+                    )
+                )
+
+                Button(
+                    onClick = {
+                        focusManager.clearFocus()
+                        onAnalyze()
+                    },
+                    enabled = !isLoading && ticker.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = AccentCyan,
+                        contentColor = PrimaryDark
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = PrimaryDark,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text("분석")
+                    }
+                }
+            }
+
+            // 결과 표시
+            if (recommendation != null) {
+                Spacer(modifier = Modifier.height(20.dp))
+                HorizontalDivider(color = BorderColor)
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // 현재가 표시
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "${recommendation.ticker} 현재가",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextDim
+                    )
+                    Text(
+                        text = "$${String.format("%.2f", recommendation.currentPrice)}",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // 매수가 추천 카드들
+                BuyPriceCard(
+                    label = "공격적 매수",
+                    icon = "🔥",
+                    price = recommendation.recommendations.aggressive.price,
+                    discount = recommendation.recommendations.aggressive.discount,
+                    reason = recommendation.recommendations.aggressive.reason,
+                    color = Color(0xFFFF6B6B)
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                BuyPriceCard(
+                    label = "적정 매수",
+                    icon = "✅",
+                    price = recommendation.recommendations.moderate.price,
+                    discount = recommendation.recommendations.moderate.discount,
+                    reason = recommendation.recommendations.moderate.reason,
+                    color = Positive
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                BuyPriceCard(
+                    label = "안전 매수",
+                    icon = "🛡️",
+                    price = recommendation.recommendations.conservative.price,
+                    discount = recommendation.recommendations.conservative.discount,
+                    reason = recommendation.recommendations.conservative.reason,
+                    color = AccentCyan
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider(color = BorderColor)
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // 분석 근거
+                Text(
+                    text = "분석 근거",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextDim,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                val analysis = recommendation.analysis
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    AnalysisRow("RSI", "${analysis.rsi} (${analysis.rsiStatus})")
+                    AnalysisRow("볼린저 하단", "$${String.format("%.2f", analysis.bollingerLower)}")
+                    AnalysisRow("52주 최저", "$${String.format("%.2f", analysis.low52Week)}")
+                    AnalysisRow("지지선", "$${String.format("%.2f", analysis.nearestSupport)}")
+                    AnalysisRow("변동성", "${String.format("%.2f", analysis.volatility)}%")
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // ML 신뢰도
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "ML 신뢰도: ${String.format("%.1f", recommendation.mlConfidence)}%",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (recommendation.mlConfidence > 50) Positive else TextDim
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // 상세보기 버튼
+                OutlinedButton(
+                    onClick = { onStockClick(recommendation.ticker, recommendation.ticker) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentCyan),
+                    border = ButtonDefaults.outlinedButtonBorder(enabled = true).copy(
+                        brush = Brush.horizontalGradient(listOf(AccentCyan, AccentBlue))
+                    )
+                ) {
+                    Text("${recommendation.ticker} 상세 차트 보기")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BuyPriceCard(
+    label: String,
+    icon: String,
+    price: Double,
+    discount: Double,
+    reason: String,
+    color: Color
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(color.copy(alpha = 0.1f))
+            .padding(16.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(text = icon, style = MaterialTheme.typography.titleLarge)
+                Column {
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = color,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = reason,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextDim
+                    )
+                }
+            }
+
+            Column(
+                horizontalAlignment = Alignment.End
+            ) {
+                Text(
+                    text = "$${String.format("%.2f", price)}",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "-${String.format("%.1f", discount)}%",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = color
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AnalysisRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = "• $label",
+            style = MaterialTheme.typography.bodySmall,
+            color = TextDim
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            color = TextPrimary
         )
     }
 }

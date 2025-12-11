@@ -71,3 +71,76 @@ data class CircuitBreakerData(
     @SerialName("timestamp")
     val timestamp: Long
 )
+
+// 매수단가 추천 응답
+@Serializable
+data class BuyRecommendation(
+    @SerialName("ticker")
+    val ticker: String,
+
+    @SerialName("currentPrice")
+    val currentPrice: Double,
+
+    @SerialName("recommendations")
+    val recommendations: BuyPriceRecommendations,
+
+    @SerialName("analysis")
+    val analysis: TechnicalAnalysis,
+
+    @SerialName("mlConfidence")
+    val mlConfidence: Double,
+
+    @SerialName("timestamp")
+    val timestamp: Long
+)
+
+@Serializable
+data class BuyPriceRecommendations(
+    @SerialName("aggressive")
+    val aggressive: BuyPriceLevel,
+
+    @SerialName("moderate")
+    val moderate: BuyPriceLevel,
+
+    @SerialName("conservative")
+    val conservative: BuyPriceLevel
+)
+
+@Serializable
+data class BuyPriceLevel(
+    @SerialName("price")
+    val price: Double,
+
+    @SerialName("discount")
+    val discount: Double,
+
+    @SerialName("reason")
+    val reason: String
+)
+
+@Serializable
+data class TechnicalAnalysis(
+    @SerialName("rsi")
+    val rsi: Double,
+
+    @SerialName("rsiStatus")
+    val rsiStatus: String,
+
+    @SerialName("bollingerLower")
+    val bollingerLower: Double,
+
+    @SerialName("bollingerPosition")
+    val bollingerPosition: Double,
+
+    @SerialName("nearestSupport")
+    val nearestSupport: Double,
+
+    @SerialName("low52Week")
+    val low52Week: Double,
+
+    @SerialName("atr")
+    val atr: Double,
+
+    @SerialName("volatility")
+    val volatility: Double
+)

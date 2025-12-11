@@ -14,10 +14,11 @@ import requests
 import time
 import yfinance as yf
 from sklearn.linear_model import LinearRegression
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.svm import SVR
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from scipy.signal import find_peaks
 import warnings
 import joblib
 import os
@@ -946,6 +947,322 @@ def get_trending_stocks():
         print(f"Trending stocks error: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
+# ============== Buy Price Recommendation ==============
+
+def calculate_support_resistance(df, window=20):
+    """Calculate support and resistance levels using local peaks and troughs"""
+    closes = df['close'].values
+    highs = df['high'].values
+    lows = df['low'].values
+
+    # Find resistance levels (local maxima in highs)
+    resistance_peaks, _ = find_peaks(highs, distance=window//2, prominence=np.std(highs)*0.5)
+
+    # Find support levels (local minima in lows - invert to find peaks)
+    support_peaks, _ = find_peaks(-lows, distance=window//2, prominence=np.std(lows)*0.5)
+
+    resistance_levels = highs[resistance_peaks] if len(resistance_peaks) > 0 else []
+    support_levels = lows[support_peaks] if len(support_peaks) > 0 else []
+
+    return list(support_levels), list(resistance_levels)
+
+def calculate_atr(df, period=14):
+    """Calculate Average True Range for volatility"""
+    high = df['high']
+    low = df['low']
+    close = df['close']
+
+    tr1 = high - low
+    tr2 = abs(high - close.shift())
+    tr3 = abs(low - close.shift())
+
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    atr = tr.rolling(window=period).mean()
+
+    return atr.iloc[-1] if not atr.empty else 0
+
+def prepare_buy_price_features(df):
+    """Prepare features for ML buy price prediction"""
+    df = df.copy()
+
+    # Technical indicators
+    df['returns'] = df['close'].pct_change()
+    df['ma5'] = df['close'].rolling(5).mean()
+    df['ma20'] = df['close'].rolling(20).mean()
+    df['ma60'] = df['close'].rolling(60).mean()
+
+    # RSI
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+
+    # Bollinger Bands
+    df['bb_middle'] = df['close'].rolling(window=20).mean()
+    std = df['close'].rolling(window=20).std()
+    df['bb_upper'] = df['bb_middle'] + (std * 2)
+    df['bb_lower'] = df['bb_middle'] - (std * 2)
+    df['bb_width'] = (df['bb_upper'] - df['bb_lower']) / df['bb_middle']
+
+    # Price position within Bollinger Bands (0 = lower, 1 = upper)
+    df['bb_position'] = (df['close'] - df['bb_lower']) / (df['bb_upper'] - df['bb_lower'])
+
+    # Volatility
+    df['volatility'] = df['returns'].rolling(20).std()
+
+    # ATR
+    tr1 = df['high'] - df['low']
+    tr2 = abs(df['high'] - df['close'].shift())
+    tr3 = abs(df['low'] - df['close'].shift())
+    df['atr'] = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1).rolling(14).mean()
+
+    # Distance from MAs (percentage)
+    df['dist_ma20'] = (df['close'] - df['ma20']) / df['ma20'] * 100
+    df['dist_ma60'] = (df['close'] - df['ma60']) / df['ma60'] * 100
+
+    # Volume trend
+    df['volume_ma'] = df['volume'].rolling(20).mean()
+    df['volume_ratio'] = df['volume'] / df['volume_ma']
+
+    return df.dropna()
+
+def train_buy_price_model(df):
+    """Train ML model to predict optimal buy prices"""
+    df_features = prepare_buy_price_features(df)
+
+    if len(df_features) < 60:
+        return None, None, None
+
+    # Features for prediction
+    feature_cols = ['rsi', 'bb_position', 'bb_width', 'volatility',
+                    'dist_ma20', 'dist_ma60', 'volume_ratio', 'atr']
+
+    X = df_features[feature_cols].values
+
+    # Target: future minimum price (next 5 days) - represents good buy opportunity
+    df_features['future_min'] = df_features['low'].rolling(5).min().shift(-5)
+    df_features['future_min_pct'] = (df_features['future_min'] - df_features['close']) / df_features['close'] * 100
+
+    # Remove NaN rows
+    valid_idx = ~df_features['future_min_pct'].isna()
+    X = X[valid_idx]
+    y = df_features.loc[valid_idx, 'future_min_pct'].values
+
+    if len(X) < 30:
+        return None, None, None
+
+    # Train model
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+
+    model = GradientBoostingRegressor(
+        n_estimators=100,
+        max_depth=4,
+        learning_rate=0.1,
+        random_state=42
+    )
+    model.fit(X_scaled, y)
+
+    # Calculate model confidence (R² on training data)
+    y_pred = model.predict(X_scaled)
+    r2 = r2_score(y, y_pred)
+
+    return model, scaler, r2
+
+@app.route('/api/stock/buy-recommendation', methods=['GET'])
+@cache.cached(timeout=300)
+def get_buy_recommendation():
+    """Get AI-powered buy price recommendation"""
+    ticker = request.args.get('ticker', '').upper()
+
+    if not ticker:
+        return jsonify({"success": False, "error": "Ticker is required"}), 400
+
+    try:
+        # Get historical data (need enough for training)
+        df = get_stock_candles(ticker, 'D', 365)
+
+        if df is None or len(df) < 120:
+            return jsonify({"success": False, "error": "Not enough historical data"}), 400
+
+        current_price = df['close'].iloc[-1]
+
+        # Calculate technical indicators
+        df_with_indicators = prepare_buy_price_features(df)
+        latest = df_with_indicators.iloc[-1]
+
+        # Calculate support/resistance
+        supports, resistances = calculate_support_resistance(df)
+
+        # Find nearest support levels
+        supports_below = [s for s in supports if s < current_price]
+        nearest_support = max(supports_below) if supports_below else current_price * 0.95
+
+        # Get Bollinger Band lower
+        bb_lower = latest['bb_lower']
+
+        # Get 52-week low
+        low_52week = df['low'].min()
+
+        # Get ATR for volatility-based calculations
+        atr = latest['atr']
+
+        # Train ML model for prediction
+        model, scaler, r2_score_val = train_buy_price_model(df)
+
+        ml_confidence = 0
+        ml_predicted_dip = 0
+
+        if model is not None:
+            # Predict expected price dip
+            feature_cols = ['rsi', 'bb_position', 'bb_width', 'volatility',
+                            'dist_ma20', 'dist_ma60', 'volume_ratio', 'atr']
+            current_features = latest[feature_cols].values.reshape(1, -1)
+            current_features_scaled = scaler.transform(current_features)
+            ml_predicted_dip = model.predict(current_features_scaled)[0]
+            ml_confidence = max(0, min(100, r2_score_val * 100))
+
+        # Calculate buy prices for each risk level
+        # 1. Aggressive: Small discount, quick entry
+        aggressive_price = current_price * (1 + ml_predicted_dip / 100 * 0.3) if ml_predicted_dip < 0 else current_price * 0.97
+        aggressive_price = max(aggressive_price, current_price - atr * 0.5)
+
+        # 2. Moderate: Technical support + ML prediction
+        moderate_factors = [
+            nearest_support,
+            bb_lower,
+            current_price * (1 + ml_predicted_dip / 100 * 0.6) if ml_predicted_dip < 0 else current_price * 0.95,
+            latest['ma20'] if latest['ma20'] < current_price else current_price * 0.95
+        ]
+        moderate_price = np.mean([f for f in moderate_factors if f < current_price]) if any(f < current_price for f in moderate_factors) else current_price * 0.95
+
+        # 3. Conservative: Stronger support, lower risk
+        conservative_factors = [
+            bb_lower * 0.98,
+            low_52week * 1.05,
+            current_price * (1 + ml_predicted_dip / 100) if ml_predicted_dip < 0 else current_price * 0.90,
+            latest['ma60'] if latest['ma60'] < current_price else current_price * 0.90
+        ]
+        conservative_price = np.mean([f for f in conservative_factors if f < current_price]) if any(f < current_price for f in conservative_factors) else current_price * 0.90
+
+        # Ensure price order: conservative < moderate < aggressive < current
+        conservative_price = min(conservative_price, moderate_price * 0.95)
+        moderate_price = min(moderate_price, aggressive_price * 0.97)
+        aggressive_price = min(aggressive_price, current_price * 0.99)
+
+        # Build response
+        result = {
+            "ticker": ticker,
+            "currentPrice": round(current_price, 2),
+            "recommendations": {
+                "aggressive": {
+                    "price": round(aggressive_price, 2),
+                    "discount": round((1 - aggressive_price / current_price) * 100, 2),
+                    "reason": "단기 반등 예상 시 빠른 진입"
+                },
+                "moderate": {
+                    "price": round(moderate_price, 2),
+                    "discount": round((1 - moderate_price / current_price) * 100, 2),
+                    "reason": "기술적 지지선 + ML 예측 기반"
+                },
+                "conservative": {
+                    "price": round(conservative_price, 2),
+                    "discount": round((1 - conservative_price / current_price) * 100, 2),
+                    "reason": "보수적 진입, 강한 지지선 근처"
+                }
+            },
+            "analysis": {
+                "rsi": round(latest['rsi'], 2),
+                "rsiStatus": "과매도" if latest['rsi'] < 30 else ("과매수" if latest['rsi'] > 70 else "중립"),
+                "bollingerLower": round(bb_lower, 2),
+                "bollingerPosition": round(latest['bb_position'] * 100, 1),
+                "nearestSupport": round(nearest_support, 2),
+                "low52Week": round(low_52week, 2),
+                "atr": round(atr, 2),
+                "volatility": round(latest['volatility'] * 100, 2)
+            },
+            "mlConfidence": round(ml_confidence, 1),
+            "timestamp": int(datetime.now().timestamp() * 1000)
+        }
+
+        return jsonify({"success": True, "data": result})
+
+    except Exception as e:
+        print(f"Buy recommendation error for {ticker}: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ============== Circuit Breaker Probability ==============
+
+@app.route('/api/market/circuit-breaker', methods=['GET'])
+@cache.cached(timeout=60)
+def get_circuit_breaker_probability():
+    """Get market circuit breaker probability based on index movement"""
+    try:
+        # Fetch S&P 500 data as market proxy
+        spy = yf.Ticker("SPY")
+        hist = spy.history(period="5d")
+
+        if hist.empty or len(hist) < 2:
+            return jsonify({"success": False, "error": "Could not fetch market data"}), 500
+
+        current_price = hist['Close'].iloc[-1]
+        previous_close = hist['Close'].iloc[-2]
+
+        # Calculate daily change
+        daily_change = ((current_price - previous_close) / previous_close) * 100
+
+        # Circuit breaker thresholds (based on S&P 500 rules)
+        threshold1 = -7.0   # Level 1: 15-min halt
+        threshold2 = -13.0  # Level 2: 15-min halt
+        threshold3 = -20.0  # Level 3: Market closes
+
+        # Determine current level
+        if daily_change <= threshold3:
+            current_level = 3
+        elif daily_change <= threshold2:
+            current_level = 2
+        elif daily_change <= threshold1:
+            current_level = 1
+        else:
+            current_level = 0
+
+        # Calculate probability based on current trajectory and volatility
+        # Get intraday volatility
+        intraday_range = (hist['High'].iloc[-1] - hist['Low'].iloc[-1]) / previous_close * 100
+
+        # Simple probability model based on current decline and volatility
+        if daily_change >= 0:
+            probability = max(0, 5 - daily_change)  # Very low if market is up
+        else:
+            # Probability increases as we approach thresholds
+            distance_to_level1 = abs(daily_change - threshold1)
+            probability = min(100, max(0,
+                (abs(daily_change) / 7 * 30) +  # Base probability from decline
+                (intraday_range * 5) +           # Add volatility factor
+                (20 if current_level >= 1 else 0) # Boost if already triggered
+            ))
+
+        result = {
+            "market": "S&P 500 (SPY)",
+            "currentLevel": current_level,
+            "probability": round(probability, 1),
+            "indexValue": round(current_price, 2),
+            "indexChange": round(daily_change, 2),
+            "threshold1": threshold1,
+            "threshold2": threshold2,
+            "threshold3": threshold3,
+            "timestamp": int(datetime.now().timestamp() * 1000)
+        }
+
+        return jsonify({"success": True, "data": result})
+
+    except Exception as e:
+        print(f"Circuit breaker error: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 # ============== Health Check ==============
 
 @app.route('/health', methods=['GET'])
@@ -970,9 +1287,11 @@ def home():
             "/api/stock/predict",
             "/api/stock/search",
             "/api/stock/trending",
+            "/api/stock/buy-recommendation",
             "/api/macro/exchange",
             "/api/macro/dollar-index",
-            "/api/macro/all"
+            "/api/macro/all",
+            "/api/market/circuit-breaker"
         ]
     })
 

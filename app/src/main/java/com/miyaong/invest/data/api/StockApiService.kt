@@ -88,6 +88,12 @@ interface StockApiService {
     // 시장 서킷브레이커 확률
     @GET("api/market/circuit-breaker")
     suspend fun getCircuitBreakerProbability(): ApiResponse<CircuitBreakerData>
+
+    // AI 매수단가 추천
+    @GET("api/stock/buy-recommendation")
+    suspend fun getBuyRecommendation(
+        @Query("ticker") ticker: String
+    ): ApiResponse<BuyRecommendation>
 }
 
 interface MacroApiService {
