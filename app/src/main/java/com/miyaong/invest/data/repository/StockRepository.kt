@@ -193,6 +193,21 @@ class StockRepository @Inject constructor(
         }
     }
 
+    // 실시간 거래 정지 목록
+    suspend fun getTradingHalts(): Result<TradingHaltsData> {
+        return try {
+            val response = stockApi.getTradingHalts()
+            if (response.success && response.data != null) {
+                Result.Success(response.data)
+            } else {
+                Result.Error(Exception(response.message ?: "Unknown error"))
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("StockRepository", "TradingHalts Error: ${e.message}", e)
+            Result.Error(e)
+        }
+    }
+
     // 즐겨찾기
     fun getAllFavorites() = favoriteDao.getAllFavorites()
 

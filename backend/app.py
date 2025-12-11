@@ -1188,6 +1188,76 @@ def get_buy_recommendation():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+# ============== Trading Halts ==============
+
+@app.route('/api/market/trading-halts', methods=['GET'])
+@cache.cached(timeout=60)
+def get_trading_halts():
+    """Get current trading halts from NYSE"""
+    try:
+        # Fetch CSV from NYSE
+        url = "https://www.nyse.com/api/trade-halts/current/download"
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        response = requests.get(url, headers=headers, timeout=10)
+
+        if response.status_code != 200:
+            return jsonify({"success": False, "error": "Failed to fetch NYSE data"}), 500
+
+        # Parse CSV
+        from io import StringIO
+        import csv
+
+        csv_data = StringIO(response.text)
+        reader = csv.DictReader(csv_data)
+
+        halts = []
+        for row in reader:
+            # Determine halt type
+            reason = row.get('Reason', '').lower()
+            if 'luld' in reason or 'limit' in reason:
+                if 'up' in reason:
+                    halt_type = "upper"  # 상킷
+                elif 'down' in reason:
+                    halt_type = "lower"  # 하킷
+                else:
+                    halt_type = "luld"
+            elif 'news' in reason:
+                halt_type = "news"
+            elif 'volatility' in reason:
+                halt_type = "volatility"
+            else:
+                halt_type = "other"
+
+            halts.append({
+                "symbol": row.get('Symbol', '').strip(),
+                "name": row.get('Name', '').strip(),
+                "exchange": row.get('Exchange', '').strip(),
+                "haltDate": row.get('Halt Date', '').strip(),
+                "haltTime": row.get('Halt Time', '').strip(),
+                "resumeDate": row.get('Resume Date', '').strip(),
+                "resumeTime": row.get('NYSE Resume Time', '').strip(),
+                "reason": row.get('Reason', '').strip(),
+                "haltType": halt_type
+            })
+
+        # Sort by halt time (most recent first)
+        halts.sort(key=lambda x: (x['haltDate'], x['haltTime']), reverse=True)
+
+        result = {
+            "halts": halts,
+            "totalCount": len(halts),
+            "timestamp": int(datetime.now().timestamp() * 1000)
+        }
+
+        return jsonify({"success": True, "data": result})
+
+    except Exception as e:
+        print(f"Trading halts error: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 # ============== Circuit Breaker Probability ==============
 
 @app.route('/api/market/circuit-breaker', methods=['GET'])
@@ -1286,7 +1356,8 @@ def home():
             "/api/macro/exchange",
             "/api/macro/dollar-index",
             "/api/macro/all",
-            "/api/market/circuit-breaker"
+            "/api/market/circuit-breaker",
+            "/api/market/trading-halts"
         ]
     })
 

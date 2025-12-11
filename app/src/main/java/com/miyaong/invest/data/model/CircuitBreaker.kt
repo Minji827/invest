@@ -144,3 +144,46 @@ data class TechnicalAnalysis(
     @SerialName("volatility")
     val volatility: Double
 )
+
+// 거래 정지 목록 응답
+@Serializable
+data class TradingHaltsData(
+    @SerialName("halts")
+    val halts: List<TradingHalt>,
+
+    @SerialName("totalCount")
+    val totalCount: Int,
+
+    @SerialName("timestamp")
+    val timestamp: Long
+)
+
+@Serializable
+data class TradingHalt(
+    @SerialName("symbol")
+    val symbol: String,
+
+    @SerialName("name")
+    val name: String,
+
+    @SerialName("exchange")
+    val exchange: String,
+
+    @SerialName("haltDate")
+    val haltDate: String,
+
+    @SerialName("haltTime")
+    val haltTime: String,
+
+    @SerialName("resumeDate")
+    val resumeDate: String,
+
+    @SerialName("resumeTime")
+    val resumeTime: String,
+
+    @SerialName("reason")
+    val reason: String,
+
+    @SerialName("haltType")
+    val haltType: String  // upper, lower, luld, news, volatility, other
+)

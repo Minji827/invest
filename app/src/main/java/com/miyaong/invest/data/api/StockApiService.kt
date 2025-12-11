@@ -94,6 +94,10 @@ interface StockApiService {
     suspend fun getBuyRecommendation(
         @Query("ticker") ticker: String
     ): ApiResponse<BuyRecommendation>
+
+    // 실시간 거래 정지 목록
+    @GET("api/market/trading-halts")
+    suspend fun getTradingHalts(): ApiResponse<TradingHaltsData>
 }
 
 interface MacroApiService {

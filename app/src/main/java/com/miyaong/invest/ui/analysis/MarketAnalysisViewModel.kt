@@ -6,6 +6,7 @@ import com.miyaong.invest.data.model.BuyRecommendation
 import com.miyaong.invest.data.model.CircuitBreakerData
 import com.miyaong.invest.data.model.PredictionResult
 import com.miyaong.invest.data.model.Result
+import com.miyaong.invest.data.model.TradingHaltsData
 import com.miyaong.invest.data.repository.StockRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,6 +19,7 @@ import javax.inject.Inject
 data class MarketAnalysisUiState(
     val isLoading: Boolean = false,
     val circuitBreaker: CircuitBreakerData? = null,
+    val tradingHalts: TradingHaltsData? = null,
     val predictionTicker: String = "SPY",
     val prediction: PredictionResult? = null,
     val isPredicting: Boolean = false,
@@ -50,6 +52,17 @@ class MarketAnalysisViewModel @Inject constructor(
                 }
                 is Result.Error -> {
                     // 에러 시 기본값 사용
+                }
+                else -> {}
+            }
+
+            // 거래 정지 목록 로드
+            when (val result = repository.getTradingHalts()) {
+                is Result.Success -> {
+                    _uiState.update { it.copy(tradingHalts = result.data) }
+                }
+                is Result.Error -> {
+                    // 에러 시 무시
                 }
                 else -> {}
             }

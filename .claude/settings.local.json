@@ -14,7 +14,8 @@
       "WebFetch(domain:archive.patrykandpatrick.com)",
       "WebSearch",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "WebFetch(domain:www.nyse.com)"
     ],
     "deny": [],
     "ask": []

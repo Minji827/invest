@@ -61,6 +61,15 @@ fun MarketAnalysisScreen(
             )
         }
 
+        // 실시간 거래 정지 목록 섹션
+        item {
+            TradingHaltsSection(
+                tradingHalts = uiState.tradingHalts,
+                isLoading = uiState.isLoading,
+                onStockClick = onStockClick
+            )
+        }
+
         // 매수단가 추천 섹션
         item {
             BuyRecommendationSection(
@@ -754,5 +763,152 @@ private fun PredictionSection(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun TradingHaltsSection(
+    tradingHalts: com.miyaong.invest.data.model.TradingHaltsData?,
+    isLoading: Boolean,
+    onStockClick: (String, String) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = SecondaryDark),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(text = "🚨", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = "실시간 거래 정지 종목",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            if (isLoading) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(100.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = AccentCyan)
+                }
+            } else if (tradingHalts != null && tradingHalts.halts.isNotEmpty()) {
+                // 상위 5개만 표시
+                val haltsToShow = tradingHalts.halts.take(5)
+
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    haltsToShow.forEach { halt ->
+                        HaltItem(halt = halt, onStockClick = onStockClick)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider(color = BorderColor.copy(alpha = 0.5f))
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "총 ${tradingHalts.totalCount}개 종목 거래 정지 중",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextDim,
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                )
+            } else {
+                Text(
+                    text = "현재 거래 정지된 종목이 없습니다.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextDim,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 24.dp),
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HaltItem(
+    halt: com.miyaong.invest.data.model.TradingHalt,
+    onStockClick: (String, String) -> Unit
+) {
+    val (icon, label, color) = getHaltTypeAttributes(halt.haltType)
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = { onStockClick(halt.symbol, halt.name) },
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = TertiaryDark)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(text = icon, style = MaterialTheme.typography.titleMedium)
+                Column {
+                    Text(
+                        text = halt.symbol,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = halt.name.take(20) + if (halt.name.length > 20) "..." else "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextDim
+                    )
+                }
+            }
+
+            Column(
+                horizontalAlignment = Alignment.End
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = color,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = halt.haltTime,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextDim
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun getHaltTypeAttributes(type: String): Triple<String, String, Color> {
+    return when (type) {
+        "upper" -> Triple("⏫", "상한가", Positive)
+        "lower" -> Triple("⏬", "하한가", Negative)
+        "luld" -> Triple("⏸️", "LULD", Color.Yellow)
+        "news" -> Triple("📰", "뉴스 대기", AccentBlue)
+        "volatility" -> Triple("⚡", "변동성 완화", Color(0xFFFFB300))
+        else -> Triple("⚠️", "기타", TextDim)
     }
 }
