@@ -276,7 +276,7 @@ private fun HomeContent(
                         Spacer(modifier = Modifier.height(16.dp))
                         
                         // Tab Row for 3 categories
-                        val tabTitles = listOf("📊 거래량", "📈 상승률", "⚡ 변동률")
+                        val tabTitles = listOf("📊 거래량", "📈 상승률", "📉 하락률")
                         TabRow(
                             selectedTabIndex = uiState.selectedTrendingTab,
                             containerColor = SecondaryDark,
@@ -306,7 +306,7 @@ private fun HomeContent(
                         val currentStocks = when (uiState.selectedTrendingTab) {
                             0 -> uiState.trendingStocks?.mostActive ?: emptyList()
                             1 -> uiState.trendingStocks?.topGainers ?: emptyList()
-                            2 -> uiState.trendingStocks?.mostVolatile ?: emptyList()
+                            2 -> uiState.trendingStocks?.topLosers ?: emptyList()
                             else -> emptyList()
                         }
                         
