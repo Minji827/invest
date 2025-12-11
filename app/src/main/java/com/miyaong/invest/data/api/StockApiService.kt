@@ -84,6 +84,10 @@ interface StockApiService {
     // 인기 종목 (3가지 카테고리)
     @GET("api/stock/trending")
     suspend fun getTrendingStocks(): ApiResponse<TrendingStocksData>
+
+    // 시장 서킷브레이커 확률
+    @GET("api/market/circuit-breaker")
+    suspend fun getCircuitBreakerProbability(): ApiResponse<CircuitBreakerData>
 }
 
 interface MacroApiService {

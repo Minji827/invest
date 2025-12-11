@@ -82,7 +82,6 @@ fun StockDetailScreen(
             )
 
             // Chart Section
-            Spacer(modifier = Modifier.height(16.dp))
             Box(modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
@@ -119,7 +118,7 @@ fun StockDetailHeader(
     lastUpdatedTimestamp: Long,
     modifier: Modifier = Modifier
 ) {
-    Box(
+    Column(
         modifier = modifier
             .fillMaxWidth()
             .background(
@@ -131,64 +130,49 @@ fun StockDetailHeader(
                     )
                 )
             )
-            .padding(24.dp)
+            .padding(horizontal = 20.dp, vertical = 16.dp)
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth()
+        // 종목명
+        Text(
+            text = name,
+            style = MaterialTheme.typography.titleLarge,
+            color = Color.White,
+            fontWeight = FontWeight.Bold
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // 가격 + 변동률 (한 줄)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(
-                text = name,
-                style = MaterialTheme.typography.headlineLarge,
+                text = if (currentPrice > 0) "$${String.format("%,.2f", currentPrice)}" else "Loading...",
+                style = MaterialTheme.typography.headlineMedium,
                 color = Color.White,
                 fontWeight = FontWeight.Bold
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = "$exchange: $symbol · $sector",
-                style = MaterialTheme.typography.bodyLarge,
-                color = Color.White.copy(alpha = 0.7f)
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Row(
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
+            if (currentPrice > 0) {
+                val changeColor = if (changePercent >= 0) Positive else Negative
                 Text(
-                    text = if (currentPrice > 0) "$${String.format("%,.2f", currentPrice)}" else "Loading...",
-                    style = MaterialTheme.typography.displayLarge,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold
+                    text = "${if (changeAmount >= 0) "+" else ""}${String.format("%,.2f", changeAmount)} (${if (changePercent >= 0) "+" else ""}${String.format("%.2f", changePercent)}%)",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = changeColor,
+                    fontWeight = FontWeight.SemiBold
                 )
-
-                if (currentPrice > 0) {
-                    val changeColor = if (changePercent >= 0) Positive else Negative
-                    Box(
-                        modifier = Modifier
-                            .background(changeColor.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
-                    ) {
-                        Text(
-                            text = "${if (changeAmount >= 0) "+" else ""}${String.format("%,.2f", changeAmount)} (${if (changePercent >= 0) "+" else ""}${String.format("%.2f", changePercent)}%)",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = changeColor,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                text = "마지막 업데이트: ${java.text.SimpleDateFormat("yyyy년 MM월 dd일 HH:mm", Locale.KOREAN).format(Date(lastUpdatedTimestamp))}",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.6f)
-            )
         }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // 업데이트 시간
+        Text(
+            text = "마지막 업데이트: ${java.text.SimpleDateFormat("yyyy년 MM월 dd일 HH:mm", Locale.KOREAN).format(Date(lastUpdatedTimestamp))}",
+            style = MaterialTheme.typography.bodySmall,
+            color = Color.White.copy(alpha = 0.6f)
+        )
     }
 }
 

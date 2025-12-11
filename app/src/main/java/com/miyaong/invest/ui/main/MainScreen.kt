@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.miyaong.invest.ui.alert.AlertScreen
+import com.miyaong.invest.ui.analysis.MarketAnalysisScreen
 import com.miyaong.invest.ui.components.*
 import com.miyaong.invest.ui.theme.*
 
@@ -110,16 +111,10 @@ fun MainScreen(
                 viewModel = viewModel,
                 paddingValues = paddingValues
             )
-            1 -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("시장분석 화면 (준비 중)", color = TextDim)
-                }
-            }
+            1 -> MarketAnalysisScreen(
+                modifier = Modifier.padding(paddingValues),
+                onStockClick = onStockClick
+            )
             2 -> AlertScreen(
                 modifier = Modifier.padding(paddingValues),
                 viewModel = alertViewModel

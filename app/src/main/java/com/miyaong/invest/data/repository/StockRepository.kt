@@ -163,6 +163,21 @@ class StockRepository @Inject constructor(
         }
     }
 
+    // 서킷브레이커 확률
+    suspend fun getCircuitBreakerProbability(): Result<CircuitBreakerData> {
+        return try {
+            val response = stockApi.getCircuitBreakerProbability()
+            if (response.success && response.data != null) {
+                Result.Success(response.data)
+            } else {
+                Result.Error(Exception(response.message ?: "Unknown error"))
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("StockRepository", "CircuitBreaker Error: ${e.message}", e)
+            Result.Error(e)
+        }
+    }
+
     // 즐겨찾기
     fun getAllFavorites() = favoriteDao.getAllFavorites()
 

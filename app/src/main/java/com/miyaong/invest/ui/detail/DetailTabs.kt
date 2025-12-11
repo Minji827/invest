@@ -29,8 +29,26 @@ fun ChartTab(
         <head>
             <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
             <style>
-                body { margin: 0; padding: 0; background-color: #121212; height: 100vh; width: 100vw; overflow: hidden; }
-                .tradingview-widget-container { height: 100%; width: 100%; }
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                html, body {
+                    width: 100%;
+                    height: 100%;
+                    background-color: #121212;
+                    overflow: hidden;
+                }
+                .tradingview-widget-container {
+                    width: 100%;
+                    height: 100%;
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                }
+                #tradingview_widget {
+                    width: 100%;
+                    height: 100%;
+                }
             </style>
         </head>
         <body>
@@ -39,20 +57,22 @@ fun ChartTab(
                 <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
                 <script type="text/javascript">
                     new TradingView.widget({
-                        "autosize": true,
+                        "width": "100%",
+                        "height": "100%",
                         "symbol": "$formattedSymbol",
-                        "interval": "D",
+                        "interval": "30",
                         "timezone": "Asia/Seoul",
                         "theme": "dark",
                         "style": "1",
                         "locale": "kr",
-                        "toolbar_bg": "#f1f3f6",
+                        "toolbar_bg": "#1e1e1e",
                         "enable_publishing": false,
                         "hide_side_toolbar": false,
                         "allow_symbol_change": false,
                         "container_id": "tradingview_widget",
+                        "hide_top_toolbar": false,
+                        "save_image": false,
                         "studies": [
-                            "MASimple@tv-basicstudies",
                             "RSI@tv-basicstudies"
                          ]
                     });
