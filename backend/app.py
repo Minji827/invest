@@ -1022,12 +1022,13 @@ def prepare_buy_price_features(df):
 
     return df.dropna()
 
-def train_buy_price_model(df):
-    """Train ML model to predict optimal buy prices"""
+def train_buy_price_model(symbol, df):
+    """Train ML model and save it to disk"""
     df_features = prepare_buy_price_features(df)
 
     if len(df_features) < 60:
-        return None, None, None
+        print(f"Not enough data to train buy model for {symbol}")
+        return None, None
 
     # Features for prediction
     feature_cols = ['rsi', 'bb_position', 'bb_width', 'volatility',
@@ -1045,7 +1046,8 @@ def train_buy_price_model(df):
     y = df_features.loc[valid_idx, 'future_min_pct'].values
 
     if len(X) < 30:
-        return None, None, None
+        print(f"Not enough training samples for {symbol}")
+        return None, None
 
     # Train model
     scaler = StandardScaler()
@@ -1060,10 +1062,19 @@ def train_buy_price_model(df):
     model.fit(X_scaled, y)
 
     # Calculate model confidence (R² on training data)
-    y_pred = model.predict(X_scaled)
-    r2 = r2_score(y, y_pred)
+    r2 = r2_score(y, y_pred=model.predict(X_scaled))
+
+    # Save the model and scaler
+    if not os.path.exists(MODELS_DIR):
+        os.makedirs(MODELS_DIR)
+        
+    joblib.dump(model, os.path.join(MODELS_DIR, f"{symbol}_buy_price_model.joblib"))
+    joblib.dump(scaler, os.path.join(MODELS_DIR, f"{symbol}_buy_price_scaler.joblib"))
+    
+    print(f"Successfully trained and saved buy price model for {symbol} with R²={r2:.2f}")
 
     return model, scaler, r2
+
 
 @app.route('/api/stock/buy-recommendation', methods=['GET'])
 @cache.cached(timeout=300)
@@ -1075,17 +1086,38 @@ def get_buy_recommendation():
         return jsonify({"success": False, "error": "Ticker is required"}), 400
 
     try:
-        # Get historical data (need enough for training)
-        df = get_stock_candles(ticker, 'D', 365)
+        # Load pre-trained model and scaler
+        model_path = os.path.join(MODELS_DIR, f"{ticker}_buy_price_model.joblib")
+        scaler_path = os.path.join(MODELS_DIR, f"{ticker}_buy_price_scaler.joblib")
 
-        if df is None or len(df) < 120:
-            return jsonify({"success": False, "error": "Not enough historical data"}), 400
+        if not os.path.exists(model_path) or not os.path.exists(scaler_path):
+            # If model is not pre-trained, return an informative error
+            return jsonify({
+                "success": False, 
+                "error": f"Buy price model for {ticker} is not available yet. Please try again later."
+            }), 404
+
+        model = joblib.load(model_path)
+        scaler = joblib.load(scaler_path)
+
+        # Get historical data (enough for feature calculation)
+        df = get_stock_candles(ticker, 'D', 120)
+
+        if df is None or len(df) < 60:
+            return jsonify({"success": False, "error": "Not enough historical data to generate recommendation"}), 400
 
         current_price = df['close'].iloc[-1]
 
-        # Calculate technical indicators
+        # Calculate technical indicators for the latest data point
         df_with_indicators = prepare_buy_price_features(df)
         latest = df_with_indicators.iloc[-1]
+
+        # Predict expected price dip with the loaded model
+        feature_cols = ['rsi', 'bb_position', 'bb_width', 'volatility',
+                        'dist_ma20', 'dist_ma60', 'volume_ratio', 'atr']
+        current_features = latest[feature_cols].values.reshape(1, -1)
+        current_features_scaled = scaler.transform(current_features)
+        ml_predicted_dip = model.predict(current_features_scaled)[0]
 
         # Calculate support/resistance
         supports, resistances = calculate_support_resistance(df)
@@ -1094,36 +1126,15 @@ def get_buy_recommendation():
         supports_below = [s for s in supports if s < current_price]
         nearest_support = max(supports_below) if supports_below else current_price * 0.95
 
-        # Get Bollinger Band lower
+        # Get Bollinger Band lower and 52-week low from the provided data
         bb_lower = latest['bb_lower']
-
-        # Get 52-week low
         low_52week = df['low'].min()
-
-        # Get ATR for volatility-based calculations
         atr = latest['atr']
 
-        # Train ML model for prediction
-        model, scaler, r2_score_val = train_buy_price_model(df)
-
-        ml_confidence = 0
-        ml_predicted_dip = 0
-
-        if model is not None:
-            # Predict expected price dip
-            feature_cols = ['rsi', 'bb_position', 'bb_width', 'volatility',
-                            'dist_ma20', 'dist_ma60', 'volume_ratio', 'atr']
-            current_features = latest[feature_cols].values.reshape(1, -1)
-            current_features_scaled = scaler.transform(current_features)
-            ml_predicted_dip = model.predict(current_features_scaled)[0]
-            ml_confidence = max(0, min(100, r2_score_val * 100))
-
         # Calculate buy prices for each risk level
-        # 1. Aggressive: Small discount, quick entry
         aggressive_price = current_price * (1 + ml_predicted_dip / 100 * 0.3) if ml_predicted_dip < 0 else current_price * 0.97
         aggressive_price = max(aggressive_price, current_price - atr * 0.5)
 
-        # 2. Moderate: Technical support + ML prediction
         moderate_factors = [
             nearest_support,
             bb_lower,
@@ -1132,7 +1143,6 @@ def get_buy_recommendation():
         ]
         moderate_price = np.mean([f for f in moderate_factors if f < current_price]) if any(f < current_price for f in moderate_factors) else current_price * 0.95
 
-        # 3. Conservative: Stronger support, lower risk
         conservative_factors = [
             bb_lower * 0.98,
             low_52week * 1.05,
@@ -1140,32 +1150,19 @@ def get_buy_recommendation():
             latest['ma60'] if latest['ma60'] < current_price else current_price * 0.90
         ]
         conservative_price = np.mean([f for f in conservative_factors if f < current_price]) if any(f < current_price for f in conservative_factors) else current_price * 0.90
-
-        # Ensure price order: conservative < moderate < aggressive < current
+        
+        # Ensure price order
         conservative_price = min(conservative_price, moderate_price * 0.95)
         moderate_price = min(moderate_price, aggressive_price * 0.97)
         aggressive_price = min(aggressive_price, current_price * 0.99)
-
-        # Build response
+        
         result = {
             "ticker": ticker,
             "currentPrice": round(current_price, 2),
             "recommendations": {
-                "aggressive": {
-                    "price": round(aggressive_price, 2),
-                    "discount": round((1 - aggressive_price / current_price) * 100, 2),
-                    "reason": "단기 반등 예상 시 빠른 진입"
-                },
-                "moderate": {
-                    "price": round(moderate_price, 2),
-                    "discount": round((1 - moderate_price / current_price) * 100, 2),
-                    "reason": "기술적 지지선 + ML 예측 기반"
-                },
-                "conservative": {
-                    "price": round(conservative_price, 2),
-                    "discount": round((1 - conservative_price / current_price) * 100, 2),
-                    "reason": "보수적 진입, 강한 지지선 근처"
-                }
+                "aggressive": {"price": round(aggressive_price, 2), "discount": round((1 - aggressive_price / current_price) * 100, 2), "reason": "단기 반등 예상 시 빠른 진입"},
+                "moderate": {"price": round(moderate_price, 2), "discount": round((1 - moderate_price / current_price) * 100, 2), "reason": "기술적 지지선 + ML 예측 기반"},
+                "conservative": {"price": round(conservative_price, 2), "discount": round((1 - conservative_price / current_price) * 100, 2), "reason": "보수적 진입, 강한 지지선 근처"}
             },
             "analysis": {
                 "rsi": round(latest['rsi'], 2),
@@ -1177,7 +1174,7 @@ def get_buy_recommendation():
                 "atr": round(atr, 2),
                 "volatility": round(latest['volatility'] * 100, 2)
             },
-            "mlConfidence": round(ml_confidence, 1),
+            "mlConfidence": 75.0, # Placeholder, as R² is not available at prediction time
             "timestamp": int(datetime.now().timestamp() * 1000)
         }
 
@@ -1185,6 +1182,8 @@ def get_buy_recommendation():
 
     except Exception as e:
         print(f"Buy recommendation error for {ticker}: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
 
 

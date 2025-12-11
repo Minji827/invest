@@ -8,7 +8,7 @@ import numpy as np
 from datetime import datetime, timedelta
 import yfinance as yf
 from sklearn.linear_model import LinearRegression
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.svm import SVR
 from sklearn.preprocessing import StandardScaler
 import joblib
@@ -118,7 +118,7 @@ def train_and_save_models(ticker):
     """
     Trains all models for a given ticker and saves them to disk.
     """
-    print(f"Starting training for {ticker}...")
+    print(f"--- Starting Price Prediction Model Training for {ticker} ---")
 
     try:
         # 1. Fetch data
@@ -161,12 +161,110 @@ def train_and_save_models(ticker):
         # 5. Save the scaler
         joblib.dump(scaler, os.path.join(MODELS_DIR, f"{ticker}_scaler.joblib"))
 
-        print(f"Successfully trained and saved models for {ticker}.")
+        print(f"Successfully trained and saved price prediction models for {ticker}.")
 
     except Exception as e:
-        print(f"An error occurred during training for {ticker}: {e}")
+        print(f"An error occurred during price prediction training for {ticker}: {e}")
+
+def prepare_buy_price_features(df):
+    """Prepare features for ML buy price prediction"""
+    df = df.copy()
+    # Technical indicators
+    df['returns'] = df['close'].pct_change()
+    df['ma5'] = df['close'].rolling(5).mean()
+    df['ma20'] = df['close'].rolling(20).mean()
+    df['ma60'] = df['close'].rolling(60).mean()
+    # RSI
+    delta = df['close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / loss
+    df['rsi'] = 100 - (100 / (1 + rs))
+    # Bollinger Bands
+    df['bb_middle'] = df['close'].rolling(window=20).mean()
+    std = df['close'].rolling(window=20).std()
+    df['bb_upper'] = df['bb_middle'] + (std * 2)
+    df['bb_lower'] = df['bb_middle'] - (std * 2)
+    df['bb_width'] = (df['bb_upper'] - df['bb_lower']) / df['bb_middle']
+    df['bb_position'] = (df['close'] - df['bb_lower']) / (df['bb_upper'] - df['bb_lower'])
+    # Volatility
+    df['volatility'] = df['returns'].rolling(20).std()
+    # ATR
+    tr1 = df['high'] - df['low']
+    tr2 = abs(df['high'] - df['close'].shift())
+    tr3 = abs(df['low'] - df['close'].shift())
+    df['atr'] = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1).rolling(14).mean()
+    # Distance from MAs
+    df['dist_ma20'] = (df['close'] - df['ma20']) / df['ma20'] * 100
+    df['dist_ma60'] = (df['close'] - df['ma60']) / df['ma60'] * 100
+    # Volume trend
+    df['volume_ma'] = df['volume'].rolling(20).mean()
+    df['volume_ratio'] = df['volume'] / df['volume_ma']
+    return df.dropna()
+
+def train_and_save_buy_model(ticker):
+    """
+    Trains the buy price recommendation model for a given ticker and saves it.
+    """
+    print(f"--- Starting Buy Recommendation Model Training for {ticker} ---")
+    try:
+        # 1. Fetch data
+        df = get_stock_candles(ticker, 'D', 400) # Need more data for robust features
+        if df is None or len(df) < 120:
+            print(f"Not enough historical data for {ticker}. Skipping buy model.")
+            return
+
+        # 2. Prepare features
+        df_features = prepare_buy_price_features(df)
+        if len(df_features) < 60:
+            print(f"Not enough data after feature engineering for {ticker}. Skipping buy model.")
+            return
+            
+        # 3. Define features and target
+        feature_cols = ['rsi', 'bb_position', 'bb_width', 'volatility',
+                        'dist_ma20', 'dist_ma60', 'volume_ratio', 'atr']
+        X = df_features[feature_cols].values
+        
+        # Target: future minimum price (next 5 days)
+        df_features['future_min'] = df_features['low'].rolling(5).min().shift(-5)
+        df_features['future_min_pct'] = (df_features['future_min'] - df_features['close']) / df_features['close'] * 100
+        
+        valid_idx = ~df_features['future_min_pct'].isna()
+        X = X[valid_idx]
+        y = df_features.loc[valid_idx, 'future_min_pct'].values
+
+        if len(X) < 30:
+            print(f"Not enough training samples for {ticker}. Skipping buy model.")
+            return
+
+        # 4. Train model and scaler
+        print(f"  Training GradientBoostingRegressor for buy recommendation...")
+        scaler = StandardScaler()
+        X_scaled = scaler.fit_transform(X)
+
+        model = GradientBoostingRegressor(
+            n_estimators=100,
+            max_depth=4,
+            learning_rate=0.1,
+            random_state=42
+        )
+        model.fit(X_scaled, y)
+        
+        # 5. Save the model and scaler
+        joblib.dump(model, os.path.join(MODELS_DIR, f"{ticker}_buy_price_model.joblib"))
+        joblib.dump(scaler, os.path.join(MODELS_DIR, f"{ticker}_buy_price_scaler.joblib"))
+
+        print(f"Successfully trained and saved buy price model for {ticker}.")
+
+    except Exception as e:
+        print(f"An error occurred during buy model training for {ticker}: {e}")
+        import traceback
+        traceback.print_exc()
+
 
 if __name__ == '__main__':
     popular_tickers = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA']
     for ticker in popular_tickers:
         train_and_save_models(ticker)
+        train_and_save_buy_model(ticker)
+        print("-" * 50)
