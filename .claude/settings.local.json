@@ -12,7 +12,8 @@
       "Bash(xargs:*)",
       "WebFetch(domain:raw.githubusercontent.com)",
       "WebFetch(domain:archive.patrykandpatrick.com)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []
