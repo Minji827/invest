@@ -50,12 +50,12 @@ data class Stock(
 data class TrendingStocksData(
     @SerialName("mostActive")
     val mostActive: List<Stock> = emptyList(),
-    
+
     @SerialName("topGainers")
     val topGainers: List<Stock> = emptyList(),
-    
-    @SerialName("mostVolatile")
-    val mostVolatile: List<Stock> = emptyList()
+
+    @SerialName("topLosers")
+    val topLosers: List<Stock> = emptyList()
 )
 
 @Serializable

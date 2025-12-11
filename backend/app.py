@@ -924,17 +924,12 @@ def get_trending_stocks():
         if category in ['all', 'gainers']:
             result['topGainers'] = _fetch_yahoo_screener('day_gainers')
         
-        # Most Volatile (변동률 상위) - using day losers + gainers combined for volatility
-        if category in ['all', 'volatile']:
-            # Yahoo doesn't have a direct "volatile" screener, so we use "day_losers" 
-            # which shows high absolute change (negative)
+        # Top Losers (하락률 상위) - sorted by most negative change
+        if category in ['all', 'losers']:
             losers = _fetch_yahoo_screener('day_losers')
-            gainers = _fetch_yahoo_screener('day_gainers')
-            
-            # Combine and sort by absolute change percent
-            combined = losers + gainers
-            combined.sort(key=lambda x: abs(x.get('changePercent', 0)), reverse=True)
-            result['mostVolatile'] = combined[:10]
+            # Sort by change percent (most negative first)
+            losers.sort(key=lambda x: x.get('changePercent', 0))
+            result['topLosers'] = losers[:10]
         
         # If single category requested, return flat list for backwards compatibility
         if category != 'all' and len(result) == 1:
