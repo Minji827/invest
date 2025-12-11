@@ -299,6 +299,33 @@ private fun BuyRecommendationSection(
                 }
             }
 
+            // 에러 표시
+            if (error != null) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF3D1F1F)),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = null,
+                            tint = Color(0xFFFF6B6B)
+                        )
+                        Text(
+                            text = error,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFFFF6B6B)
+                        )
+                    }
+                }
+            }
+
             // 결과 표시
             if (recommendation != null) {
                 Spacer(modifier = Modifier.height(20.dp))
